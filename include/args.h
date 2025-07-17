@@ -47,8 +47,6 @@ DECLARE_int32(rec_img_h);
 DECLARE_int32(rec_img_w);
 // Character recognition configuration
 DECLARE_bool(use_space_char);
-// Smart space processing
-DECLARE_bool(enable_smart_spaces);
 // forward related
 DECLARE_bool(det);
 DECLARE_bool(rec);

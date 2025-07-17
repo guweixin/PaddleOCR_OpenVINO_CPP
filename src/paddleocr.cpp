@@ -185,12 +185,6 @@ namespace PaddleOCR
       ocr_results[i].score = rec_text_scores[i];
     }
 
-    // Apply smart space processing to improve readability (if enabled)
-    if (FLAGS_enable_smart_spaces)
-    {
-      Utility::ProcessOCRResultsWithSpaces(ocr_results);
-    }
-
     this->time_info_rec[0] += rec_times[0];
     this->time_info_rec[1] += rec_times[1];
     this->time_info_rec[2] += rec_times[2];
