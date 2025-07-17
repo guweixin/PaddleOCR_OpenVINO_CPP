@@ -37,22 +37,6 @@ namespace PaddleOCR
                                 const std::vector<OCRPredictResult> &ocr_result,
                                 const std::string &save_path) noexcept;
 
-    // Smart space insertion for OCR results
-    static std::string AddSmartSpaces(const std::string &text) noexcept;
-    static std::string ProcessSinglePart(const std::string &text) noexcept;
-    static void ProcessOCRResultsWithSpaces(std::vector<OCRPredictResult> &ocr_results) noexcept;
-
-    // Helper functions for smart space processing
-    static bool IsPunctuation(char c) noexcept;
-    static bool IsApostrophe(char c) noexcept;
-    static bool IsHyphen(char c) noexcept;
-    static bool IsVowel(char c) noexcept;
-    static bool IsConsonant(char c) noexcept;
-    static bool ShouldAddSpaceBetweenLetters(const std::string &lowerText, size_t pos) noexcept;
-    static bool IsCommonWord(const std::string &lowerText, size_t start, size_t end) noexcept;
-    static bool IsCommonWordEnding(const std::string &text, size_t pos) noexcept;
-    static bool IsLikelyWordStart(const std::string &text, size_t pos) noexcept;
-
     template <class ForwardIterator>
     inline static size_t argmax(ForwardIterator first,
                                 ForwardIterator last) noexcept

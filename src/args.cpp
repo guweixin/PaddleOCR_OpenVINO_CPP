@@ -50,9 +50,6 @@ DEFINE_int32(rec_img_w, 320, "rec image width");
 // Character recognition configuration
 DEFINE_bool(use_space_char, true, "Whether to add space character to the recognition vocabulary for space prediction.");
 
-// Smart space processing
-DEFINE_bool(enable_smart_spaces, true, "Whether to add smart spaces between words in OCR results.");
-
 // ocr forward related
 DEFINE_bool(det, true, "Whether use det in forward.");
 DEFINE_bool(rec, true, "Whether use rec in forward.");
