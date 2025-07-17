@@ -86,7 +86,7 @@ namespace PaddleOCR
         {
           std::cerr << "Failed to load YAML file: " << e.what() << std::endl;
         }
-        if (label_path == "./utils/ppocr_keys_v1.txt" &&
+        if (label_path == "../../utils/ppocr_keys_v1.txt" &&
             !rec_char_list.empty())
         {
           std::string new_rec_char_dict_path = model_dir + "/ppocr_keys.txt";
