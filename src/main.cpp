@@ -1,0 +1,480 @@
+// Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <opencv2/imgcodecs.hpp>
+
+#include <include/args.h>
+#include <include/paddleocr.h>
+
+#include <iostream>
+#include <vector>
+#include <chrono>
+#include <fstream>
+#include <iomanip>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
+#else
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
+
+// Simple memory monitoring and progress display
+struct MemoryUsage
+{
+  size_t current_mb;
+  size_t peak_mb;
+  size_t initial_mb;
+};
+
+static size_t initial_memory_mb = 0;
+
+// Auto-detected GPU usage flag based on inference_device
+bool auto_use_gpu = false;
+
+MemoryUsage getMemoryUsage()
+{
+  MemoryUsage usage = {0, 0, initial_memory_mb};
+
+#ifdef _WIN32
+  PROCESS_MEMORY_COUNTERS memInfo;
+  if (GetProcessMemoryInfo(GetCurrentProcess(), &memInfo, sizeof(memInfo)))
+  {
+    usage.current_mb = memInfo.WorkingSetSize / (1024 * 1024);
+    usage.peak_mb = memInfo.PeakWorkingSetSize / (1024 * 1024);
+  }
+#else
+  struct rusage rusage_info;
+  if (getrusage(RUSAGE_SELF, &rusage_info) == 0)
+  {
+    usage.current_mb = rusage_info.ru_maxrss / 1024; // Linux: KB to MB
+    usage.peak_mb = usage.current_mb;                // On Linux, ru_maxrss is already peak
+  }
+#endif
+
+  return usage;
+}
+
+void initMemoryMonitor()
+{
+  MemoryUsage usage = getMemoryUsage();
+  initial_memory_mb = usage.current_mb;
+}
+
+void showProgress(size_t current, size_t total)
+{
+  const int bar_width = 50;
+  float progress = static_cast<float>(current) / total;
+  int pos = static_cast<int>(bar_width * progress);
+
+  std::cout << "\r[";
+  for (int i = 0; i < bar_width; ++i)
+  {
+    if (i < pos)
+      std::cout << "=";
+    else if (i == pos)
+      std::cout << ">";
+    else
+      std::cout << " ";
+  }
+  std::cout << "] " << std::fixed << std::setprecision(1) << (progress * 100.0) << "% "
+            << current << "/" << total;
+  std::cout.flush();
+
+  if (current == total)
+  {
+    std::cout << std::endl;
+  }
+}
+
+using namespace PaddleOCR;
+
+void check_params()
+{
+  if (FLAGS_det)
+  {
+    if (FLAGS_det_model_dir.empty() || FLAGS_image_dir.empty())
+    {
+      std::cout << "Usage[det]: ./ppocr "
+                   "--det_model_dir=/PATH/TO/DET_INFERENCE_MODEL/ "
+                << "--image_dir=/PATH/TO/INPUT/IMAGE/" << std::endl;
+      exit(1);
+    }
+
+    // Check detection model file for OpenVINO
+    if (FLAGS_inference_framework == "ov")
+    {
+      std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
+      std::ifstream file(det_model_path);
+      if (!file.good())
+      {
+        std::cout << "Error: Detection model file '" << det_model_path
+                  << "' not found" << std::endl;
+        exit(1);
+      }
+    }
+  }
+  if (FLAGS_rec)
+  {
+    std::cout
+        << "In PP-OCRv3, rec_image_shape parameter defaults to '3, 48, 320',"
+           "if you are using recognition model with PP-OCRv2 or an older "
+           "version, "
+           "please set --rec_image_shape='3,32,320"
+        << std::endl;
+    if (FLAGS_rec_model_dir.empty() || FLAGS_image_dir.empty())
+    {
+      std::cout << "Usage[rec]: ./ppocr "
+                   "--rec_model_dir=/PATH/TO/REC_INFERENCE_MODEL/ "
+                << "--image_dir=/PATH/TO/INPUT/IMAGE/" << std::endl;
+      exit(1);
+    }
+
+    // Check recognition model file for OpenVINO
+    if (FLAGS_inference_framework == "ov")
+    {
+      std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+      std::ifstream file(rec_model_path);
+      if (!file.good())
+      {
+        std::cout << "Error: Recognition model file '" << rec_model_path
+                  << "' not found" << std::endl;
+        exit(1);
+      }
+    }
+  }
+  if (FLAGS_precision != "fp32" && FLAGS_precision != "fp16" &&
+      FLAGS_precision != "int8")
+  {
+    std::cout << "precision should be 'fp32'(default), 'fp16' or 'int8'. "
+              << std::endl;
+    exit(1);
+  }
+
+  // Check inference framework parameters
+  if (FLAGS_inference_framework != "paddle" && FLAGS_inference_framework != "ov")
+  {
+    std::cout << "inference_framework should be 'paddle'(default) or 'ov'(OpenVINO). " << std::endl;
+    exit(1);
+  }
+
+  // Check inference device parameters for OpenVINO
+  if (FLAGS_inference_framework == "ov")
+  {
+    if (FLAGS_inference_device != "CPU" && FLAGS_inference_device != "GPU" && FLAGS_inference_device != "NPU")
+    {
+      std::cout << "inference_device should be 'CPU', 'GPU', or 'NPU' for OpenVINO. " << std::endl;
+      exit(1);
+    }
+  }
+
+  // Auto-detect GPU usage based on inference_device parameter
+  auto_use_gpu = (FLAGS_inference_device == "GPU");
+
+  // Check batch processing mode parameters (output is required)
+  if (FLAGS_image_dir.empty())
+  {
+    std::cout << "Batch processing mode requires --image_dir parameter." << std::endl;
+    exit(1);
+  }
+  if (FLAGS_output.empty())
+  {
+    std::cout << "Batch processing mode requires --output parameter." << std::endl;
+    exit(1);
+  }
+
+  // Display inference framework information
+  std::cout << "=== Inference Configuration ===" << std::endl;
+  std::cout << "Framework: " << FLAGS_inference_framework << std::endl;
+  std::cout << "GPU Usage: " << (auto_use_gpu ? "Enabled" : "Disabled") << " (auto-detected from device: " << FLAGS_inference_device << ")" << std::endl;
+  if (FLAGS_inference_framework == "ov")
+  {
+    std::cout << "Device: " << FLAGS_inference_device << std::endl;
+    if (FLAGS_det)
+    {
+      std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
+      std::cout << "Detection model: " << det_model_path << std::endl;
+    }
+    if (FLAGS_rec)
+    {
+      std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+      std::cout << "Recognition model: " << rec_model_path << std::endl;
+    }
+  }
+  std::cout << "===============================" << std::endl;
+}
+
+std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool verbose = true)
+{
+  cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+  if (!img.data)
+  {
+    if (verbose)
+    {
+      std::cerr << "[ERROR] image read failed! image path: " << image_path << std::endl;
+    }
+    return "";
+  }
+
+  if (verbose)
+  {
+    auto start_time_total = std::chrono::high_resolution_clock::now();
+
+    // Image loading timing
+    auto start_load = std::chrono::high_resolution_clock::now();
+    auto end_load = std::chrono::high_resolution_clock::now();
+    auto load_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_load - start_load);
+
+    std::cout << "\n=== Processing: " << image_path << " ===" << std::endl;
+    std::cout << "Image size: " << img.rows << "x" << img.cols << " pixels" << std::endl;
+    std::cout << "Image loading: " << load_duration.count() << " ms" << std::endl;
+
+    // Reset OCR timer before processing to get accurate timing for this image
+    ocr.reset_timer();
+
+    // OCR processing timing
+    auto start_ocr = std::chrono::high_resolution_clock::now();
+    std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
+    auto end_ocr = std::chrono::high_resolution_clock::now();
+    auto ocr_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_ocr - start_ocr);
+
+    std::cout << "OCR processing: " << ocr_duration.count() << " ms" << std::endl;
+    std::cout << "Text boxes found: " << ocr_results.size() << std::endl;
+
+    // Print detailed OCR timing breakdown (det/rec)
+    ocr.benchmark_log(1);
+
+    // Post-processing timing
+    auto start_post = std::chrono::high_resolution_clock::now();
+    std::string result_text = "";
+    for (const auto &res : ocr_results)
+    {
+      result_text += res.text + "\n";
+    }
+    auto end_post = std::chrono::high_resolution_clock::now();
+    auto post_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_post - start_post);
+
+    auto end_time_total = std::chrono::high_resolution_clock::now();
+    auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_total - start_time_total);
+
+    std::cout << "Post-processing: " << post_duration.count() << " ms" << std::endl;
+    std::cout << "Total time: " << total_duration.count() << " ms" << std::endl;
+    std::cout << "==========================================\n"
+              << std::endl;
+
+    return result_text;
+  }
+  else
+  {
+    // Evaluation mode - no verbose output
+    std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
+
+    std::string result_text = "";
+    for (const auto &res : ocr_results)
+    {
+      result_text += res.text + "\n";
+    }
+
+    return result_text;
+  }
+}
+
+void run_batch_processing_mode()
+{
+  std::cout << "Starting PaddleOCR batch processing mode..." << std::endl;
+
+  // Initialize memory monitor
+  initMemoryMonitor();
+
+  // Check if image directory exists
+  if (!Utility::PathExists(FLAGS_image_dir))
+  {
+    std::cerr << "[ERROR] Image directory not found: " << FLAGS_image_dir << std::endl;
+    exit(1);
+  }
+
+  // Check if output directory exists, create if not
+  if (!Utility::PathExists(FLAGS_output))
+  {
+    Utility::CreateDir(FLAGS_output);
+  }
+
+  // Get all image files from the directory
+  std::vector<cv::String> cv_all_img_names;
+  std::vector<cv::String> temp_files;
+
+  // Search for different image formats
+  cv::glob(FLAGS_image_dir + "/*.jpg", cv_all_img_names);
+  cv::glob(FLAGS_image_dir + "/*.png", temp_files);
+  cv_all_img_names.insert(cv_all_img_names.end(), temp_files.begin(), temp_files.end());
+  temp_files.clear();
+
+  cv::glob(FLAGS_image_dir + "/*.jpeg", temp_files);
+  cv_all_img_names.insert(cv_all_img_names.end(), temp_files.begin(), temp_files.end());
+  temp_files.clear();
+
+  cv::glob(FLAGS_image_dir + "/*.JPG", temp_files);
+  cv_all_img_names.insert(cv_all_img_names.end(), temp_files.begin(), temp_files.end());
+  temp_files.clear();
+
+  cv::glob(FLAGS_image_dir + "/*.PNG", temp_files);
+  cv_all_img_names.insert(cv_all_img_names.end(), temp_files.begin(), temp_files.end());
+
+  if (cv_all_img_names.empty())
+  {
+    std::cerr << "[ERROR] No image files found in: " << FLAGS_image_dir << std::endl;
+    std::cerr << "[INFO] Supported formats: .jpg, .png, .jpeg" << std::endl;
+    exit(1);
+  }
+
+  size_t total_items = cv_all_img_names.size();
+  std::cout << "Found " << total_items << " image files." << std::endl;
+  std::cout << "Processing..." << std::endl;
+
+  // Initialize OCR
+  PPOCR ocr;
+
+  // Statistics
+  double sum_inference_time = 0.0;
+  MemoryUsage initial_memory = getMemoryUsage();
+  MemoryUsage max_memory = initial_memory;
+  double sum_memory_increase = 0.0;
+
+  // Process each image
+  for (size_t i = 0; i < total_items; ++i)
+  {
+    // Show progress
+    showProgress(i + 1, total_items);
+
+    // Measure inference time (excluding file I/O time)
+    auto start_time = std::chrono::high_resolution_clock::now();
+    std::string image_text = ocr_single_image(ocr, cv_all_img_names[i], false); // non-verbose mode
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    sum_inference_time += inference_time;
+
+    // Measure memory (not included in inference time)
+    MemoryUsage current_memory = getMemoryUsage();
+    if (current_memory.current_mb > max_memory.current_mb)
+    {
+      max_memory = current_memory;
+    }
+    sum_memory_increase += (current_memory.current_mb - initial_memory.current_mb);
+
+    // Save results (time not included in inference time)
+    std::string base_name = cv_all_img_names[i].substr(cv_all_img_names[i].find_last_of("/\\") + 1);
+    base_name = base_name.substr(0, base_name.find_last_of('.'));
+    std::string output_file = FLAGS_output + "/" + base_name + ".txt";
+
+    std::ofstream out_file(output_file);
+    if (out_file.is_open())
+    {
+      out_file << image_text;
+      out_file.close();
+    }
+  }
+
+  // Print final results
+  std::cout << std::endl;
+  std::cout << "======================== Processing Results ========================" << std::endl;
+  std::cout << std::fixed << std::setprecision(2);
+  std::cout << "Average inference time: " << (sum_inference_time / total_items) << " ms" << std::endl;
+  std::cout << std::fixed << std::setprecision(2);
+  std::cout << "Memory usage (increase only):" << std::endl;
+  std::cout << "  Average increase: " << (sum_memory_increase / total_items) << " MB" << std::endl;
+  std::cout << "  Maximum increase: " << (max_memory.current_mb - initial_memory.current_mb) << " MB" << std::endl;
+  std::cout << "Results saved to: " << FLAGS_output << std::endl;
+  std::cout << "=================================================================" << std::endl;
+}
+
+void run_inference_mode(std::vector<cv::String> &cv_all_img_names)
+{
+  std::cout << "Starting PaddleOCR inference mode..." << std::endl;
+
+  PPOCR ocr;
+
+  double sum_inference_time = 0.0;
+  size_t processed_count = 0;
+
+  for (int i = 0; i < cv_all_img_names.size(); ++i)
+  {
+    cv::Mat img = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
+    if (!img.data)
+    {
+      std::cerr << "[ERROR] image read failed! image path: " << cv_all_img_names[i] << std::endl;
+      continue;
+    }
+
+    std::cout << "Processing: " << cv_all_img_names[i] << std::endl;
+
+    // Measure inference time
+    auto start_time = std::chrono::high_resolution_clock::now();
+    std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    sum_inference_time += inference_time;
+    processed_count++;
+
+    std::cout << "Inference time: " << std::fixed << std::setprecision(2) << inference_time << " ms" << std::endl;
+
+    // Save results (time not included in inference time)
+    std::string base_name = cv_all_img_names[i].substr(cv_all_img_names[i].find_last_of("/\\") + 1);
+    base_name = base_name.substr(0, base_name.find_last_of('.'));
+    std::string output_file = FLAGS_output + "/" + base_name + ".txt";
+
+    std::ofstream out_file(output_file);
+    if (out_file.is_open())
+    {
+      for (const auto &res : ocr_results)
+      {
+        out_file << res.text << std::endl;
+      }
+      out_file.close();
+      std::cout << "Results saved to: " << output_file << std::endl;
+    }
+
+    // Print results to console
+    Utility::print_result(ocr_results);
+
+    if (FLAGS_visualize && FLAGS_det)
+    {
+      std::string file_name = Utility::basename(cv_all_img_names[i]);
+      Utility::VisualizeBboxes(img, ocr_results, FLAGS_output + "/" + file_name);
+    }
+  }
+
+  if (processed_count > 0)
+  {
+    std::cout << std::endl;
+    std::cout << "======================== Inference Results ========================" << std::endl;
+    std::cout << "Average inference time per image: " << std::fixed << std::setprecision(2)
+              << (sum_inference_time / processed_count) << " ms" << std::endl;
+    std::cout << "================================================================" << std::endl;
+  }
+}
+
+int main(int argc, char **argv)
+{
+  // Parsing command-line
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  check_params();
+
+  // Use batch processing mode as default
+  run_batch_processing_mode();
+  return 0;
+}
