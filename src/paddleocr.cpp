@@ -17,6 +17,7 @@
 #include <include/ocr_rec.h>
 #include <include/paddleocr.h>
 #include <include/ocr_interface.h>
+#include <include/data_saver.h>
 
 #include <auto_log/autolog.h>
 
@@ -38,7 +39,7 @@ namespace PaddleOCR
         }
         else if (model_type == "rec")
         {
-          filename = "inference_320_bs1.xml";
+          filename = "inference_480_bs1.xml";
         }
         else
         {
@@ -132,6 +133,7 @@ namespace PaddleOCR
 
   std::vector<OCRPredictResult> PPOCR::ocr(const cv::Mat &img, bool det, bool rec) noexcept
   {
+    std::cout << "------------- PPOCR::ocr----------------" << "\"" << std::endl;
     std::vector<OCRPredictResult> ocr_result;
     // det
     this->det(img, ocr_result);
@@ -143,6 +145,7 @@ namespace PaddleOCR
       img_list.emplace_back(std::move(crop_img));
     }
     // rec
+
     if (rec)
     {
       this->rec(img_list, ocr_result);
@@ -164,6 +167,19 @@ namespace PaddleOCR
       res.box = std::move(boxes[i]);
       ocr_results.emplace_back(std::move(res));
     }
+
+    // Save debug data if enabled
+    if (FLAGS_save_debug_data)
+    {
+      static int det_image_counter = 0;
+
+      // // Save original image
+      // std::string orig_img_filename = "../../debug_data/cpp_original_img_" + std::to_string(det_image_counter) + ".npy";
+      // DataSaver::SaveMatAsNpy(img, orig_img_filename);
+
+      det_image_counter++;
+    }
+
     // sort boex from top to bottom, from left to right
     Utility::sort_boxes(ocr_results);
     this->time_info_det[0] += det_times[0];
@@ -178,11 +194,28 @@ namespace PaddleOCR
     std::vector<float> rec_text_scores(img_list.size(), 0);
     std::vector<double> rec_times;
     this->pri_->recognizer_->Run(img_list, rec_texts, rec_text_scores, rec_times);
+
     // output rec results
     for (size_t i = 0; i < rec_texts.size(); ++i)
     {
       ocr_results[i].text = std::move(rec_texts[i]);
       ocr_results[i].score = rec_text_scores[i];
+    }
+
+    // Save debug data if enabled
+    if (FLAGS_save_debug_data)
+    {
+      static int rec_batch_counter = 0;
+
+      // // Save input images
+      // for (size_t i = 0; i < img_list.size(); ++i)
+      // {
+      //   std::string img_filename = "../../debug_data/cpp_rec_input_img_batch" +
+      //                              std::to_string(rec_batch_counter) + "_" + std::to_string(i) + ".npy";
+      //   DataSaver::SaveMatAsNpy(img_list[i], img_filename);
+      // }
+
+      rec_batch_counter++;
     }
 
     this->time_info_rec[0] += rec_times[0];

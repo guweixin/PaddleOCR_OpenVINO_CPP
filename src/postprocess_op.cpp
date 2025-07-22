@@ -253,80 +253,89 @@ float DBPostProcessor::BoxScoreFast(
 }
 
 std::vector<std::vector<std::vector<int>>> DBPostProcessor::BoxesFromBitmap(
-    const cv::Mat &pred, const cv::Mat &bitmap, const float &box_thresh,
-    const float &det_db_unclip_ratio,
-    const std::string &det_db_score_mode) noexcept {
+    const cv::Mat &pred, const cv::Mat &bitmap, 
+    int dest_width, int dest_height) noexcept {
+  
   const int min_size = 3;
   const int max_candidates = 1000;
-
-  int width = bitmap.cols;
-  int height = bitmap.rows;
+  const float box_thresh = 0.7f;  // Fixed threshold like Python version
+  const float det_db_unclip_ratio = 2.0f;  // Fixed unclip ratio like Python version
+  
+  int height = bitmap.rows;  // Should be 544 for typical models
+  int width = bitmap.cols;   // Should be 544 for typical models
 
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hierarchy;
 
-  cv::findContours(bitmap, contours, hierarchy, cv::RETR_LIST,
+  // Ensure bitmap is binary (bool values should be 0 or 255)
+  cv::Mat bitmap_binary;
+  if (bitmap.type() == CV_8UC1) {
+    // If already uint8, ensure it's binary (0 or 255)
+    cv::threshold(bitmap, bitmap_binary, 127, 255, cv::THRESH_BINARY);
+  } else {
+    // Convert boolean/float bitmap to binary uint8
+    bitmap.convertTo(bitmap_binary, CV_8UC1, 255.0);
+    cv::threshold(bitmap_binary, bitmap_binary, 127, 255, cv::THRESH_BINARY);
+  }
+
+  cv::findContours(bitmap_binary, contours, hierarchy, cv::RETR_LIST,
                    cv::CHAIN_APPROX_SIMPLE);
 
-  int num_contours =
-      contours.size() >= max_candidates ? max_candidates : contours.size();
+  int num_contours = std::min(static_cast<int>(contours.size()), max_candidates);
 
   std::vector<std::vector<std::vector<int>>> boxes;
 
-  for (int _i = 0; _i < num_contours; ++_i) {
-    if (contours[_i].size() <= 2) {
+  for (int index = 0; index < num_contours; ++index) {
+    if (contours[index].size() <= 2) {
       continue;
     }
-    float ssid;
-    cv::RotatedRect box = cv::minAreaRect(contours[_i]);
-    auto array = GetMiniBoxes(box, ssid);
+    
+    float sside;
+    cv::RotatedRect box = cv::minAreaRect(contours[index]);
+    auto points = GetMiniBoxes(box, sside);
 
-    auto box_for_unclip = array;
-    // end get_mini_box
-
-    if (ssid < min_size) {
+    if (sside < min_size) {
       continue;
     }
 
-    float score;
-    if (det_db_score_mode == "slow")
-      /* compute using polygon*/
-      score = PolygonScoreAcc(contours[_i], pred);
-    else
-      score = BoxScoreFast(array, pred);
+    // Calculate score using fast method (like Python box_score_fast)
+    float score = BoxScoreFast(points, pred);
 
-    if (score < box_thresh)
-      continue;
-
-    // start for unclip
-    cv::RotatedRect points = UnClip(box_for_unclip, det_db_unclip_ratio);
-    if (points.size.height < 1.001 && points.size.width < 1.001) {
+    if (score < box_thresh) {
       continue;
     }
-    // end for unclip
 
-    cv::RotatedRect clipbox = points;
-    auto cliparray = GetMiniBoxes(clipbox, ssid);
-
-    if (ssid < min_size + 2)
+    // Unclip the box (like Python unclip function)
+    cv::RotatedRect unclipped_box = UnClip(points, det_db_unclip_ratio);
+    if (unclipped_box.size.height < 1.001 && unclipped_box.size.width < 1.001) {
       continue;
+    }
 
-    int dest_width = pred.cols;
-    int dest_height = pred.rows;
+    // Get mini boxes from unclipped box
+    auto cliparray = GetMiniBoxes(unclipped_box, sside);
+
+    if (sside < min_size + 2) {
+      continue;
+    }
+
+    // Convert to final coordinates (like Python final conversion)
+    // Scale from bitmap coordinates [0, height) x [0, width) to dest coordinates [0, dest_height) x [0, dest_width)
     std::vector<std::vector<int>> intcliparray;
-
     for (int num_pt = 0; num_pt < 4; ++num_pt) {
-      std::vector<int> a{int(clampf(roundf(cliparray[num_pt][0] / float(width) *
-                                           float(dest_width)),
-                                    0, float(dest_width))),
-                         int(clampf(roundf(cliparray[num_pt][1] /
-                                           float(height) * float(dest_height)),
-                                    0, float(dest_height)))};
-      intcliparray.emplace_back(std::move(a));
+      // Scale from bitmap size to dest size and clamp
+      int x = static_cast<int>(std::round(cliparray[num_pt][0] / static_cast<float>(width) * static_cast<float>(dest_width)));
+      int y = static_cast<int>(std::round(cliparray[num_pt][1] / static_cast<float>(height) * static_cast<float>(dest_height)));
+      
+      // Clamp to valid range
+      x = std::max(0, std::min(x, dest_width - 1));
+      y = std::max(0, std::min(y, dest_height - 1));
+      
+      std::vector<int> point{x, y};
+      intcliparray.emplace_back(std::move(point));
     }
     boxes.emplace_back(std::move(intcliparray));
-
-  } // end for
+  }
+  
   return boxes;
 }
 
@@ -343,8 +352,8 @@ void DBPostProcessor::FilterTagDetRes(
       boxes[n][m][0] /= ratio_w;
       boxes[n][m][1] /= ratio_h;
 
-      boxes[n][m][0] = int(_min(_max(boxes[n][m][0], 0), oriimg_w - 1));
-      boxes[n][m][1] = int(_min(_max(boxes[n][m][1], 0), oriimg_h - 1));
+      boxes[n][m][0] = int(std::min(std::max(boxes[n][m][0], 0), oriimg_w - 1));
+      boxes[n][m][1] = int(std::min(std::max(boxes[n][m][1], 0), oriimg_h - 1));
     }
   }
 

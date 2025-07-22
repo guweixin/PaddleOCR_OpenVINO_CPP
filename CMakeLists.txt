@@ -245,6 +245,7 @@ if (WITH_OPENVINO)
 endif()
 
 list(APPEND SRCS "./src/ocr_interface.cpp")
+list(APPEND SRCS "./src/data_saver.cpp")
 
 add_executable(${DEMO_NAME} ${SRCS})
 target_link_libraries(${DEMO_NAME} ${DEPS})

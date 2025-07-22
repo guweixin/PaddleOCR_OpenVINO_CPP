@@ -14,6 +14,8 @@
 
 #include <include/ocr_det_openvino.h>
 #include <include/utility.h>
+#include <include/args.h>
+#include <include/data_saver.h>
 
 #include <chrono>
 #include <numeric>
@@ -159,6 +161,24 @@ namespace PaddleOCR
             float *output_data = output_tensor.data<float>();
             std::memcpy(out_data.data(), output_data, out_num * sizeof(float));
 
+            // Save debug data if enabled
+            if (FLAGS_save_debug_data)
+            {
+                static int det_inference_counter = 0;
+
+                // Save input tensor data
+                std::vector<size_t> input_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+                std::vector<size_t> output_shape_vec(output_shape.begin(), output_shape.end());
+
+                DataSaver::SaveDetectionData(input, input_shape, out_data, output_shape_vec, det_inference_counter);
+
+                // // Save preprocessed image
+                // std::string prep_img_filename = "../../debug_data/cpp_preprocessed_img_" + std::to_string(det_inference_counter) + ".npy";
+                // DataSaver::SaveMatAsNpy(resize_img, prep_img_filename);
+
+                det_inference_counter++;
+            }
+
             auto inference_end = std::chrono::steady_clock::now();
 
             // Postprocessing
@@ -192,8 +212,18 @@ namespace PaddleOCR
             }
 
             boxes = std::move(post_processor_.BoxesFromBitmap(
-                pred_map, bit_map, this->det_db_box_thresh_, this->det_db_unclip_ratio_,
-                this->det_db_score_mode_));
+                pred_map, bit_map, srcimg.cols, srcimg.rows));
+
+            // // Print boxes for debugging
+            // std::cout << "[DEBUG] BoxesFromBitmap returned " << boxes.size() << " boxes:" << std::endl;
+            // for (size_t i = 0; i < boxes.size(); ++i) {
+            //     std::cout << "  Box " << i << ": ";
+            //     for (size_t j = 0; j < boxes[i].size(); ++j) {
+            //         if (j > 0) std::cout << " -> ";
+            //         std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
+            //     }
+            //     std::cout << std::endl;
+            // }
 
             post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, srcimg);
             auto postprocess_end = std::chrono::steady_clock::now();

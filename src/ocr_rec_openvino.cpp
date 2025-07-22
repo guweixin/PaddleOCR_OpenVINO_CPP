@@ -14,6 +14,8 @@
 
 #include <include/ocr_rec_openvino.h>
 #include <include/utility.h>
+#include <include/args.h>
+#include <include/data_saver.h>
 
 #include <chrono>
 #include <numeric>
@@ -46,7 +48,6 @@ namespace PaddleOCR
             std::cout << "[OpenVINO] Recognition model file loaded successfully" << std::endl;
 
             // Configure device-specific settings
-            // ov::AnyMap config ={{},{}};
             ov::AnyMap config = {{"CACHE_DIR", "./cache"},
                                  {"PERFORMANCE_HINT", "LATENCY"}};
             if (device_ == "CPU")
@@ -54,16 +55,6 @@ namespace PaddleOCR
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "10";
             }
-            // else if (device_ == "GPU")
-            // {
-            //     // GPU-specific configurations
-            //     config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
-            // }
-            // else
-            // {
-            //     // CPU configurations
-            //     config["INFERENCE_NUM_THREADS"] = "4";
-            // }
 
             // Compile the model for the specified device
             compiled_model_ = core_.compile_model(model, device_, config);
@@ -145,9 +136,9 @@ namespace PaddleOCR
 
                 if (device_ == "NPU")
                 {
-                    // NPU specific preprocessing: fixed size [48,320] with aspect ratio preserved and white padding
+                    // NPU specific preprocessing: fixed size [48,480] with aspect ratio preserved and white padding
                     int target_h = 48;
-                    int target_w = 320;
+                    int target_w = 480;
                     batch_width = target_w;
 
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
@@ -156,7 +147,7 @@ namespace PaddleOCR
                         int original_h = img_list[idx].rows;
                         int original_w = img_list[idx].cols;
 
-                        // Calculate scale to fit within [48,320] while preserving aspect ratio
+                        // Calculate scale to fit within [48,480] while preserving aspect ratio
                         float scale_h = static_cast<float>(target_h) / original_h;
                         float scale_w = static_cast<float>(target_w) / original_w;
                         float scale = std::min(scale_h, scale_w);
@@ -168,7 +159,7 @@ namespace PaddleOCR
                         cv::Mat scaled_img;
                         cv::resize(img_list[idx], scaled_img, cv::Size(new_w, new_h));
 
-                        // Create [48,320] canvas with white background
+                        // Create [48,480] canvas with white background
                         resize_img = cv::Mat(target_h, target_w, CV_8UC3, cv::Scalar(255, 255, 255));
 
                         // Left-align the scaled image (same as Python version)
@@ -244,6 +235,31 @@ namespace PaddleOCR
 
                 float *output_data = output_tensor.data<float>();
                 std::memcpy(predict_batch.data(), output_data, out_num * sizeof(float));
+
+                // Save debug data if enabled
+                if (FLAGS_save_debug_data)
+                {
+                    static int rec_batch_counter = 0;
+
+                    std::vector<size_t> input_shape_vec = {static_cast<size_t>(batch_size), 3,
+                                                           static_cast<size_t>(this->rec_img_h_),
+                                                           static_cast<size_t>(batch_width)};
+                    std::vector<size_t> output_shape_vec(output_shape.begin(), output_shape.end());
+
+                    // Save recognition model input and output data
+                    DataSaver::SaveRecognitionData(input, input_shape_vec, predict_batch, output_shape_vec,
+                                                   rec_batch_counter, beg_img_no);
+
+                    // // Save individual preprocessed images for debugging
+                    // for (int i = 0; i < batch_size && i < norm_img_batch.size(); ++i)
+                    // {
+                    //     std::string img_filename = "../../debug_data/cpp_preprocessed_img_batch" +
+                    //                                std::to_string(rec_batch_counter) + "_" + std::to_string(beg_img_no + i) + ".npy";
+                    //     DataSaver::SaveMatAsNpy(norm_img_batch[i], img_filename);
+                    // }
+
+                    rec_batch_counter++;
+                }
 
                 auto inference_end = std::chrono::steady_clock::now(); // Postprocessing
                 auto postprocess_start = std::chrono::steady_clock::now();

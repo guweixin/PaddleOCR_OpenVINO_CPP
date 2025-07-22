@@ -282,6 +282,22 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
     // Evaluation mode - no verbose output
     std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
 
+    // Print detection text box coordinates
+    for (size_t i = 0; i < ocr_results.size(); ++i)
+    {
+      const auto &res = ocr_results[i];
+      std::cout << "Text box " << i + 1 << ": \"" << res.text << "\"" << std::endl;
+      std::cout << "  Coordinates: ";
+      for (size_t j = 0; j < res.box.size(); ++j)
+      {
+        if (j > 0)
+          std::cout << " -> ";
+        std::cout << "(" << res.box[j][0] << "," << res.box[j][1] << ")";
+      }
+      std::cout << std::endl;
+      std::cout << "  Score: " << res.score << std::endl;
+    }
+
     std::string result_text = "";
     for (const auto &res : ocr_results)
     {

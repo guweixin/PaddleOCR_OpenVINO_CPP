@@ -53,3 +53,6 @@ DEFINE_bool(use_space_char, true, "Whether to add space character to the recogni
 // ocr forward related
 DEFINE_bool(det, true, "Whether use det in forward.");
 DEFINE_bool(rec, true, "Whether use rec in forward.");
+
+// debug data saving
+DEFINE_bool(save_debug_data, false, "Save model input/output data as npy files for debugging");

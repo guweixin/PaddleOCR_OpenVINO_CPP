@@ -43,8 +43,7 @@ namespace PaddleOCR
 
     std::vector<std::vector<std::vector<int>>>
     BoxesFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
-                    const float &box_thresh, const float &det_db_unclip_ratio,
-                    const std::string &det_db_score_mode) noexcept;
+                    int dest_width, int dest_height) noexcept;
 
     void FilterTagDetRes(std::vector<std::vector<std::vector<int>>> &boxes,
                          float ratio_h, float ratio_w,
