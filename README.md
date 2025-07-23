@@ -88,6 +88,7 @@ ppocr.exe --det_model_dir=path_to_models/ch_PP-OCRv4_det_infer \
 |gpu_mem|int|4000|申请的GPU内存|
 |cpu_math_library_num_threads|int|10|CPU预测时的线程数，在机器核数充足的情况下，该值越大，预测速度越快|
 |enable_mkldnn|bool|true|是否使用mkldnn库|
+|<font color=red>save_debug_data</font>|bool|false|<font color=red>是否保存debug数据，包括检测识别输入输出npy和绘制文本框的中间图像</font>|
 
 - 前向相关
 
