@@ -219,6 +219,8 @@ void check_params()
 
 std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool verbose = true)
 {
+
+  std::cout << "[DEBUG] Processing image: " << image_path << std::endl;
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
   if (!img.data)
   {
@@ -244,6 +246,9 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
 
     // Reset OCR timer before processing to get accurate timing for this image
     ocr.reset_timer();
+
+    // Set current image path for debugging
+    PaddleOCR::g_current_image_path = image_path;
 
     // OCR processing timing
     auto start_ocr = std::chrono::high_resolution_clock::now();

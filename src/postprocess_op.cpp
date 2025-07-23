@@ -267,15 +267,14 @@ std::vector<std::vector<std::vector<int>>> DBPostProcessor::BoxesFromBitmap(
   std::vector<std::vector<cv::Point>> contours;
   std::vector<cv::Vec4i> hierarchy;
 
-  // Ensure bitmap is binary (bool values should be 0 or 255)
+  // Ensure bitmap is binary - Python uses (bitmap * 255).astype(np.uint8)
   cv::Mat bitmap_binary;
   if (bitmap.type() == CV_8UC1) {
-    // If already uint8, ensure it's binary (0 or 255)
-    cv::threshold(bitmap, bitmap_binary, 127, 255, cv::THRESH_BINARY);
+    // If already uint8, multiply by 255 to ensure proper scaling like Python
+    bitmap.convertTo(bitmap_binary, CV_8UC1, 255.0);
   } else {
     // Convert boolean/float bitmap to binary uint8
     bitmap.convertTo(bitmap_binary, CV_8UC1, 255.0);
-    cv::threshold(bitmap_binary, bitmap_binary, 127, 255, cv::THRESH_BINARY);
   }
 
   cv::findContours(bitmap_binary, contours, hierarchy, cv::RETR_LIST,
@@ -318,17 +317,22 @@ std::vector<std::vector<std::vector<int>>> DBPostProcessor::BoxesFromBitmap(
       continue;
     }
 
-    // Convert to final coordinates (like Python final conversion)
-    // Scale from bitmap coordinates [0, height) x [0, width) to dest coordinates [0, dest_height) x [0, dest_width)
+    // Convert to final coordinates exactly like Python version:
+    // box[:, 0] = np.clip(np.round(box[:, 0] / width * dest_width), 0, dest_width)
+    // box[:, 1] = np.clip(np.round(box[:, 1] / height * dest_height), 0, dest_height)
     std::vector<std::vector<int>> intcliparray;
     for (int num_pt = 0; num_pt < 4; ++num_pt) {
-      // Scale from bitmap size to dest size and clamp
-      int x = static_cast<int>(std::round(cliparray[num_pt][0] / static_cast<float>(width) * static_cast<float>(dest_width)));
-      int y = static_cast<int>(std::round(cliparray[num_pt][1] / static_cast<float>(height) * static_cast<float>(dest_height)));
+      // Python logic: box[:, 0] / width * dest_width
+      float x_scaled = cliparray[num_pt][0] / static_cast<float>(width) * static_cast<float>(dest_width);
+      float y_scaled = cliparray[num_pt][1] / static_cast<float>(height) * static_cast<float>(dest_height);
       
-      // Clamp to valid range
-      x = std::max(0, std::min(x, dest_width - 1));
-      y = std::max(0, std::min(y, dest_height - 1));
+      // Python logic: np.clip(np.round(...), 0, dest_width)
+      int x = static_cast<int>(std::round(x_scaled));
+      int y = static_cast<int>(std::round(y_scaled));
+      
+      // Python uses np.clip(..., 0, dest_width) not dest_width-1
+      x = std::max(0, std::min(x, dest_width));
+      y = std::max(0, std::min(y, dest_height));
       
       std::vector<int> point{x, y};
       intcliparray.emplace_back(std::move(point));
@@ -349,8 +353,10 @@ void DBPostProcessor::FilterTagDetRes(
   for (size_t n = 0; n < boxes.size(); ++n) {
     boxes[n] = OrderPointsClockwise(boxes[n]);
     for (size_t m = 0; m < boxes[0].size(); ++m) {
-      boxes[n][m][0] /= ratio_w;
-      boxes[n][m][1] /= ratio_h;
+      // NOTE: BoxesFromBitmap already scaled coordinates to original image size
+      // No need to divide by ratio again
+      // boxes[n][m][0] /= ratio_w;
+      // boxes[n][m][1] /= ratio_h;
 
       boxes[n][m][0] = int(std::min(std::max(boxes[n][m][0], 0), oriimg_w - 1));
       boxes[n][m][1] = int(std::min(std::max(boxes[n][m][1], 0), oriimg_h - 1));

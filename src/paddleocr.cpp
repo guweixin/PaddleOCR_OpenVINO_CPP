@@ -24,6 +24,9 @@
 namespace PaddleOCR
 {
 
+  // Global variable to store current image path for debugging
+  thread_local std::string g_current_image_path = "";
+
   // Utility function to get the correct model path for different frameworks
   std::string getModelPath(const std::string &model_dir, const std::string &model_type)
   {
@@ -133,7 +136,6 @@ namespace PaddleOCR
 
   std::vector<OCRPredictResult> PPOCR::ocr(const cv::Mat &img, bool det, bool rec) noexcept
   {
-    std::cout << "------------- PPOCR::ocr----------------" << "\"" << std::endl;
     std::vector<OCRPredictResult> ocr_result;
     // det
     this->det(img, ocr_result);
@@ -156,6 +158,11 @@ namespace PaddleOCR
   void PPOCR::det(const cv::Mat &img,
                   std::vector<OCRPredictResult> &ocr_results) noexcept
   {
+    // Print current image path for debugging
+    if (!g_current_image_path.empty()) {
+      std::cout << "[DEBUG] Processing image: " << g_current_image_path << std::endl;
+    }
+
     std::vector<std::vector<std::vector<int>>> boxes;
     std::vector<double> det_times;
 

@@ -18,6 +18,9 @@
 
 namespace PaddleOCR
 {
+  // Global variable to store current image path for debugging
+  extern thread_local std::string g_current_image_path;
+
   // Utility function to get the correct model path for different frameworks
   std::string getModelPath(const std::string &model_dir, const std::string &model_type);
 

@@ -188,6 +188,11 @@ namespace PaddleOCR
             int n3 = static_cast<int>(output_shape[3]);
             int n = n2 * n3;
 
+            std::cout << "[DEBUG] Original image size: " << img.cols << "x" << img.rows << std::endl;
+            std::cout << "[DEBUG] Resized image size: " << resize_img.cols << "x" << resize_img.rows << std::endl;
+            std::cout << "[DEBUG] Model output size: " << n3 << "x" << n2 << std::endl;
+            std::cout << "[DEBUG] srcimg size passed to BoxesFromBitmap: " << srcimg.cols << "x" << srcimg.rows << std::endl;
+
             std::vector<float> pred(n, 0.0);
             std::vector<unsigned char> cbuf(n, ' ');
 
@@ -214,18 +219,36 @@ namespace PaddleOCR
             boxes = std::move(post_processor_.BoxesFromBitmap(
                 pred_map, bit_map, srcimg.cols, srcimg.rows));
 
-            // // Print boxes for debugging
-            // std::cout << "[DEBUG] BoxesFromBitmap returned " << boxes.size() << " boxes:" << std::endl;
-            // for (size_t i = 0; i < boxes.size(); ++i) {
-            //     std::cout << "  Box " << i << ": ";
-            //     for (size_t j = 0; j < boxes[i].size(); ++j) {
-            //         if (j > 0) std::cout << " -> ";
-            //         std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
-            //     }
-            //     std::cout << std::endl;
-            // }
+            // Print boxes for debugging
+            std::cout << "[DEBUG] BoxesFromBitmap returned " << boxes.size() << " boxes:" << std::endl;
+            for (size_t i = 0; i < boxes.size(); ++i)
+            {
+                std::cout << "  Box " << i << ": ";
+                for (size_t j = 0; j < boxes[i].size(); ++j)
+                {
+                    if (j > 0)
+                        std::cout << " -> ";
+                    std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
+                }
+                std::cout << std::endl;
+            }
 
             post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, srcimg);
+            
+            // Print boxes after FilterTagDetRes for debugging
+            std::cout << "[DEBUG] After FilterTagDetRes, final boxes:" << std::endl;
+            for (size_t i = 0; i < boxes.size(); ++i)
+            {
+                std::cout << "  Final Box " << i << ": ";
+                for (size_t j = 0; j < boxes[i].size(); ++j)
+                {
+                    if (j > 0)
+                        std::cout << " -> ";
+                    std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
+                }
+                std::cout << std::endl;
+            }
+            
             auto postprocess_end = std::chrono::steady_clock::now();
 
             // Calculate timing
