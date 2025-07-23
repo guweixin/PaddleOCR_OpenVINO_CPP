@@ -193,12 +193,39 @@ void DataSaver::SaveRecognitionData(const std::vector<float> &input_data,
 
 void DataSaver::SaveImageWithTextBoxes(const cv::Mat &original_image,
                                        const std::vector<std::vector<std::vector<int>>> &boxes,
-                                       int image_idx)
+                                       const std::string &image_path,
+                                       const std::string &output_dir)
 {
     try
     {
-        // Create debug directory if not exists
-        CreateDirectoryIfNotExists("../../debug_data");
+        // Create output directory if not exists
+        CreateDirectoryIfNotExists(output_dir);
+
+        // Extract filename from image path
+        std::string filename;
+        size_t last_slash = image_path.find_last_of("/\\");
+        if (last_slash != std::string::npos)
+        {
+            filename = image_path.substr(last_slash + 1);
+        }
+        else
+        {
+            filename = image_path;
+        }
+
+        // Remove extension and add "_with_boxes" suffix
+        size_t last_dot = filename.find_last_of(".");
+        std::string base_filename;
+        std::string extension = ".png";
+        if (last_dot != std::string::npos)
+        {
+            base_filename = filename.substr(0, last_dot);
+            extension = filename.substr(last_dot);
+        }
+        else
+        {
+            base_filename = filename;
+        }
 
         // Create a copy of the original image to draw on
         cv::Mat image_with_boxes = original_image.clone();
@@ -257,14 +284,23 @@ void DataSaver::SaveImageWithTextBoxes(const cv::Mat &original_image,
             }
         }
 
-        // Save the image with text boxes
-        std::string output_filename = "../../debug_data/cpp_image_with_boxes_" + 
-                                      std::to_string(image_idx) + ".png";
+        // Construct output filename
+        std::string output_filename = output_dir;
+        // Ensure output directory ends with separator
+        if (!output_filename.empty() && output_filename.back() != '/' && output_filename.back() != '\\')
+        {
+#ifdef _WIN32
+            output_filename += "\\";
+#else
+            output_filename += "/";
+#endif
+        }
+        output_filename += base_filename + "_with_boxes" + extension;
         
         bool success = cv::imwrite(output_filename, image_with_boxes);
         if (success)
         {
-            std::cout << "[DEBUG] Saved image with text boxes: " << output_filename << std::endl;
+            std::cout << "[DEBUG] Saved image with " << boxes.size() << " text boxes: " << output_filename << std::endl;
         }
         else
         {

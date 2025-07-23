@@ -248,14 +248,6 @@ namespace PaddleOCR
                 }
                 std::cout << std::endl;
             }
-
-            // Save image with text boxes if debug mode is enabled
-            if (FLAGS_save_debug_data)
-            {
-                static int debug_image_counter = 0;
-                DataSaver::SaveImageWithTextBoxes(srcimg, boxes, debug_image_counter);
-                debug_image_counter++;
-            }
             
             auto postprocess_end = std::chrono::steady_clock::now();
 
