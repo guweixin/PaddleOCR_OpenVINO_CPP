@@ -49,6 +49,11 @@ public:
     static void SaveDetectionBoxes(const std::vector<std::vector<std::vector<int>>> &boxes, 
                                    int image_idx);
 
+    // Draw text boxes on image and save
+    static void SaveImageWithTextBoxes(const cv::Mat &original_image,
+                                       const std::vector<std::vector<std::vector<int>>> &boxes,
+                                       int image_idx);
+
     // Create directory if not exists
     static void CreateDirectoryIfNotExists(const std::string &dir_path);
 

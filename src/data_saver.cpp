@@ -190,3 +190,89 @@ void DataSaver::SaveRecognitionData(const std::vector<float> &input_data,
                                   std::to_string(batch_idx) + "_img" + std::to_string(image_idx) + ".npy";
     SaveFloatArrayAsNpy(output_data, output_shape, output_filename);
 }
+
+void DataSaver::SaveImageWithTextBoxes(const cv::Mat &original_image,
+                                       const std::vector<std::vector<std::vector<int>>> &boxes,
+                                       int image_idx)
+{
+    try
+    {
+        // Create debug directory if not exists
+        CreateDirectoryIfNotExists("../../debug_data");
+
+        // Create a copy of the original image to draw on
+        cv::Mat image_with_boxes = original_image.clone();
+
+        // Define colors for different boxes (BGR format)
+        std::vector<cv::Scalar> colors = {
+            cv::Scalar(0, 255, 0),   // Green
+            cv::Scalar(255, 0, 0),   // Blue
+            cv::Scalar(0, 0, 255),   // Red
+            cv::Scalar(255, 255, 0), // Cyan
+            cv::Scalar(255, 0, 255), // Magenta
+            cv::Scalar(0, 255, 255)  // Yellow
+        };
+
+        // Draw each text box
+        for (size_t i = 0; i < boxes.size(); ++i)
+        {
+            const auto &box = boxes[i];
+            if (box.size() != 4) continue; // Skip invalid boxes
+
+            // Convert box coordinates to cv::Point
+            std::vector<cv::Point> points;
+            for (const auto &point : box)
+            {
+                if (point.size() >= 2)
+                {
+                    points.emplace_back(point[0], point[1]);
+                }
+            }
+
+            if (points.size() == 4)
+            {
+                // Choose color based on box index
+                cv::Scalar color = colors[i % colors.size()];
+
+                // Draw the box as a filled polygon with transparency
+                std::vector<cv::Point> contour = points;
+                cv::Mat overlay = image_with_boxes.clone();
+                cv::fillPoly(overlay, std::vector<std::vector<cv::Point>>{contour}, color);
+                cv::addWeighted(image_with_boxes, 0.7, overlay, 0.3, 0, image_with_boxes);
+
+                // Draw the box outline
+                cv::polylines(image_with_boxes, std::vector<std::vector<cv::Point>>{contour}, 
+                              true, color, 3, cv::LINE_AA);
+
+                // Draw corner points
+                for (const auto &point : points)
+                {
+                    cv::circle(image_with_boxes, point, 5, color, -1);
+                }
+
+                // Add box index text
+                cv::putText(image_with_boxes, "Box" + std::to_string(i), 
+                           cv::Point(points[0].x, points[0].y - 10),
+                           cv::FONT_HERSHEY_SIMPLEX, 0.8, color, 2);
+            }
+        }
+
+        // Save the image with text boxes
+        std::string output_filename = "../../debug_data/cpp_image_with_boxes_" + 
+                                      std::to_string(image_idx) + ".png";
+        
+        bool success = cv::imwrite(output_filename, image_with_boxes);
+        if (success)
+        {
+            std::cout << "[DEBUG] Saved image with text boxes: " << output_filename << std::endl;
+        }
+        else
+        {
+            std::cerr << "[ERROR] Failed to save image with text boxes: " << output_filename << std::endl;
+        }
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "[ERROR] Exception in SaveImageWithTextBoxes: " << e.what() << std::endl;
+    }
+}
