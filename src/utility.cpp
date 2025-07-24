@@ -148,10 +148,18 @@ namespace PaddleOCR
       points[i][1] -= top;
     }
 
-    int img_crop_width = int(sqrt(pow(points[0][0] - points[1][0], 2) +
-                                  pow(points[0][1] - points[1][1], 2)));
-    int img_crop_height = int(sqrt(pow(points[0][0] - points[3][0], 2) +
-                                   pow(points[0][1] - points[3][1], 2)));
+    // int img_crop_width = int(sqrt(pow(points[0][0] - points[1][0], 2) +
+    //                               pow(points[0][1] - points[1][1], 2)));
+
+    // int img_crop_height = int(sqrt(pow(points[0][0] - points[3][0], 2) +
+    //                                pow(points[0][1] - points[3][1], 2)));
+
+    int img_crop_width = static_cast<int>(std::max(
+        sqrt(pow(points[0][0] - points[1][0], 2) + pow(points[0][1] - points[1][1], 2)),
+        sqrt(pow(points[2][0] - points[3][0], 2) + pow(points[2][1] - points[3][1], 2))));
+    int img_crop_height = static_cast<int>(std::max(
+        sqrt(pow(points[0][0] - points[3][0], 2) + pow(points[0][1] - points[3][1], 2)),
+        sqrt(pow(points[1][0] - points[2][0], 2) + pow(points[1][1] - points[2][1], 2))));
 
     const cv::Point2f pts_std[4] = {
         {0., 0.},
@@ -163,14 +171,12 @@ namespace PaddleOCR
                                     {(float)points[1][0], (float)points[1][1]},
                                     {(float)points[2][0], (float)points[2][1]},
                                     {(float)points[3][0], (float)points[3][1]}};
-
     cv::Mat M = cv::getPerspectiveTransform(pointsf, pts_std);
 
     cv::Mat dst_img;
     cv::warpPerspective(img_crop, dst_img, M,
                         cv::Size(img_crop_width, img_crop_height),
-                        cv::BORDER_REPLICATE);
-
+                        cv::BORDER_REPLICATE, cv::INTER_CUBIC);
     if (float(dst_img.rows) >= float(dst_img.cols) * 1.5)
     {
       cv::Mat srcCopy(dst_img.rows, dst_img.cols, dst_img.depth());

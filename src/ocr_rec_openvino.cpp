@@ -107,6 +107,20 @@ namespace PaddleOCR
 
             int img_num = static_cast<int>(img_list.size());
 
+            // Create temporary vectors to store results in sorted order
+            std::vector<std::string> temp_rec_texts;
+            std::vector<float> temp_rec_text_scores;
+            temp_rec_texts.reserve(img_num);
+            temp_rec_text_scores.reserve(img_num);
+
+            // Calculate aspect ratio and sort indices for optimization (same as Python version)
+            std::vector<float> width_list;
+            for (int i = 0; i < img_num; ++i)
+            {
+                width_list.emplace_back(static_cast<float>(img_list[i].cols) / static_cast<float>(img_list[i].rows));
+            }
+            std::vector<size_t> indices = Utility::argsort(width_list);
+
             // Set batch size based on device type
             int batch_num;
             if (device_ == "NPU")
@@ -144,8 +158,8 @@ namespace PaddleOCR
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
                     {
                         cv::Mat resize_img;
-                        int original_h = img_list[idx].rows;
-                        int original_w = img_list[idx].cols;
+                        int original_h = img_list[indices[idx]].rows;
+                        int original_w = img_list[indices[idx]].cols;
 
                         // Calculate scale to fit within [48,480] while preserving aspect ratio
                         float scale_h = static_cast<float>(target_h) / original_h;
@@ -157,7 +171,7 @@ namespace PaddleOCR
 
                         // Resize while preserving aspect ratio
                         cv::Mat scaled_img;
-                        cv::resize(img_list[idx], scaled_img, cv::Size(new_w, new_h));
+                        cv::resize(img_list[indices[idx]], scaled_img, cv::Size(new_w, new_h));
 
                         // Create [48,480] canvas with white background
                         resize_img = cv::Mat(target_h, target_w, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -181,8 +195,8 @@ namespace PaddleOCR
                     float max_wh_ratio = static_cast<float>(this->rec_img_w_) / static_cast<float>(this->rec_img_h_);
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
                     {
-                        int h = img_list[idx].rows;
-                        int w = img_list[idx].cols;
+                        int h = img_list[indices[idx]].rows;
+                        int w = img_list[indices[idx]].cols;
                         float wh_ratio = w * 1.0f / h;
                         max_wh_ratio = std::max(max_wh_ratio, wh_ratio);
                     }
@@ -192,7 +206,7 @@ namespace PaddleOCR
                     {
                         cv::Mat resize_img;
                         std::vector<int> rec_image_shape = {3, this->rec_img_h_, this->rec_img_w_};
-                        this->resize_op_.Run(img_list[idx], resize_img, max_wh_ratio, false, rec_image_shape);
+                        this->resize_op_.Run(img_list[indices[idx]], resize_img, max_wh_ratio, false, rec_image_shape);
 
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
                         norm_img_batch.push_back(resize_img);
@@ -206,7 +220,7 @@ namespace PaddleOCR
                 std::vector<float> input(batch_size * 3 * this->rec_img_h_ * batch_width, 0.0f);
 
                 this->permute_op_.Run(norm_img_batch, input.data());
-
+                // this->
                 auto preprocess_end = std::chrono::steady_clock::now();
 
                 // Inference with OpenVINO
@@ -313,13 +327,13 @@ namespace PaddleOCR
 
                     if (!std::isnan(score) && !str_res.empty())
                     {
-                        rec_texts.push_back(str_res);
-                        rec_text_scores.push_back(score);
+                        temp_rec_texts.push_back(str_res);
+                        temp_rec_text_scores.push_back(score);
                     }
                     else
                     {
-                        rec_texts.push_back("");
-                        rec_text_scores.push_back(0.0f);
+                        temp_rec_texts.push_back("");
+                        temp_rec_text_scores.push_back(0.0f);
                     }
                 }
 
@@ -333,6 +347,15 @@ namespace PaddleOCR
                 total_preprocess_time += preprocess_diff.count() * 1000;
                 total_inference_time += inference_diff.count() * 1000;
                 total_postprocess_time += postprocess_diff.count() * 1000;
+            }
+
+            // Reorder results back to original sequence (same as Python version)
+            rec_texts.resize(img_num);
+            rec_text_scores.resize(img_num);
+            for (int i = 0; i < img_num; ++i)
+            {
+                rec_texts[indices[i]] = temp_rec_texts[i];
+                rec_text_scores[indices[i]] = temp_rec_text_scores[i];
             }
 
             // Set final timing results

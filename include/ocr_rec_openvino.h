@@ -39,7 +39,8 @@ namespace PaddleOCR
             this->rec_img_w_ = rec_img_w;
 
             this->mean_ = {0.5, 0.5, 0.5};
-            this->scale_ = {1.0 / 0.5, 1.0 / 0.5, 1.0 / 0.5};
+            this->scale_ = {0.5, 0.5, 0.5};
+            // this->scale_ = {1.0 / 0.5, 1.0 / 0.5, 1.0 / 0.5};
             this->is_scale_ = true;
 
             LoadModel(model_dir);

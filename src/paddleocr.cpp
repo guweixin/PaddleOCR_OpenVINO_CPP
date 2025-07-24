@@ -144,6 +144,7 @@ namespace PaddleOCR
     for (size_t j = 0; j < ocr_result.size(); ++j)
     {
       cv::Mat crop_img = Utility::GetRotateCropImage(img, ocr_result[j].box);
+      // cv::imwrite("test_crop" + std::to_string(j) + ".jpg", crop_img);
       img_list.emplace_back(std::move(crop_img));
     }
     // rec
@@ -159,7 +160,8 @@ namespace PaddleOCR
                   std::vector<OCRPredictResult> &ocr_results) noexcept
   {
     // Print current image path for debugging
-    if (!g_current_image_path.empty()) {
+    if (!g_current_image_path.empty())
+    {
       std::cout << "[DEBUG] Processing image: " << g_current_image_path << std::endl;
     }
 
