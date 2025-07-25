@@ -37,9 +37,19 @@ namespace PaddleOCR
 
     void reset_timer() noexcept;
     void benchmark_log(int img_num) noexcept;
+    void detailed_benchmark_log(int img_num) noexcept;
 
   protected:
+    // Detailed timing information for detection
+    // [resize, normalize, permute, inference, threshold, dilation, boxes_from_bitmap, filter_tag]
+    std::vector<double> time_info_det_detailed = {0, 0, 0, 0, 0, 0, 0, 0};
+    // Summary timing for detection [preprocess, inference, postprocess]
     std::vector<double> time_info_det = {0, 0, 0};
+    
+    // Detailed timing information for recognition
+    // [resize, normalize, permute, inference, postprocess_decode]
+    std::vector<double> time_info_rec_detailed = {0, 0, 0, 0, 0};
+    // Summary timing for recognition [preprocess, inference, postprocess]
     std::vector<double> time_info_rec = {0, 0, 0};
 
     void det(const cv::Mat &img,

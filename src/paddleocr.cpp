@@ -20,6 +20,8 @@
 #include <include/data_saver.h>
 
 #include <auto_log/autolog.h>
+#include <numeric>
+#include <iomanip>
 
 namespace PaddleOCR
 {
@@ -159,11 +161,11 @@ namespace PaddleOCR
   void PPOCR::det(const cv::Mat &img,
                   std::vector<OCRPredictResult> &ocr_results) noexcept
   {
-    // Print current image path for debugging
-    if (!g_current_image_path.empty())
-    {
-      std::cout << "[DEBUG] Processing image: " << g_current_image_path << std::endl;
-    }
+    // // Print current image path for debugging
+    // if (!g_current_image_path.empty())
+    // {
+    //   std::cout << "[DEBUG] Processing image: " << g_current_image_path << std::endl;
+    // }
 
     std::vector<std::vector<std::vector<int>>> boxes;
     std::vector<double> det_times;
@@ -191,9 +193,28 @@ namespace PaddleOCR
 
     // sort boex from top to bottom, from left to right
     Utility::sort_boxes(ocr_results);
-    this->time_info_det[0] += det_times[0];
-    this->time_info_det[1] += det_times[1];
-    this->time_info_det[2] += det_times[2];
+    
+    // Update detailed timing information if available
+    if (det_times.size() >= 11)
+    {
+        // Update detailed detection timings
+        // [resize, normalize, permute, inference, threshold, dilation, boxes_from_bitmap, filter_tag]
+        for (int i = 0; i < 8; ++i)
+        {
+            this->time_info_det_detailed[i] += det_times[i];
+        }
+        // Update summary detection timings (indices 8, 9, 10)
+        this->time_info_det[0] += det_times[8];  // preprocess
+        this->time_info_det[1] += det_times[9];  // inference
+        this->time_info_det[2] += det_times[10]; // postprocess
+    }
+    else
+    {
+        // Fallback to old format (3 summary timings only)
+        this->time_info_det[0] += det_times[0];
+        this->time_info_det[1] += det_times[1];
+        this->time_info_det[2] += det_times[2];
+    }
   }
 
   void PPOCR::rec(const std::vector<cv::Mat> &img_list,
@@ -227,15 +248,35 @@ namespace PaddleOCR
       rec_batch_counter++;
     }
 
-    this->time_info_rec[0] += rec_times[0];
-    this->time_info_rec[1] += rec_times[1];
-    this->time_info_rec[2] += rec_times[2];
+    // Update detailed timing information if available
+    if (rec_times.size() >= 8)
+    {
+        // Update detailed recognition timings
+        // [resize, normalize, permute, inference, postprocess]
+        for (int i = 0; i < 5; ++i)
+        {
+            this->time_info_rec_detailed[i] += rec_times[i];
+        }
+        // Update summary recognition timings (indices 5, 6, 7)
+        this->time_info_rec[0] += rec_times[5];  // preprocess
+        this->time_info_rec[1] += rec_times[6];  // inference
+        this->time_info_rec[2] += rec_times[7];  // postprocess
+    }
+    else
+    {
+        // Fallback to old format (3 summary timings only)
+        this->time_info_rec[0] += rec_times[0];
+        this->time_info_rec[1] += rec_times[1];
+        this->time_info_rec[2] += rec_times[2];
+    }
   }
 
   void PPOCR::reset_timer() noexcept
   {
     this->time_info_det = {0, 0, 0};
     this->time_info_rec = {0, 0, 0};
+    this->time_info_det_detailed = {0, 0, 0, 0, 0, 0, 0, 0};
+    this->time_info_rec_detailed = {0, 0, 0, 0, 0};
   }
 
   void PPOCR::benchmark_log(int img_num) noexcept
@@ -257,6 +298,69 @@ namespace PaddleOCR
                              this->time_info_rec, img_num);
       autolog_rec.report();
     }
+  }
+
+  void PPOCR::detailed_benchmark_log(int img_num) noexcept
+  {
+    std::cout << std::endl;
+    std::cout << "==================== Detailed Timing Statistics ====================" << std::endl;
+    std::cout << std::fixed << std::setprecision(2);
+    
+    // Detection detailed timing
+    if (std::accumulate(time_info_det_detailed.begin(), time_info_det_detailed.end(), 0.0) > 0)
+    {
+      std::cout << "Detection Module (per image average):" << std::endl;
+      std::cout << "  Resize operation:       " << (time_info_det_detailed[0] / img_num) << " ms" << std::endl;
+      std::cout << "  Normalize operation:    " << (time_info_det_detailed[1] / img_num) << " ms" << std::endl;
+      std::cout << "  Permute operation:      " << (time_info_det_detailed[2] / img_num) << " ms" << std::endl;
+      std::cout << "  Inference:              " << (time_info_det_detailed[3] / img_num) << " ms" << std::endl;
+      std::cout << "  Threshold operation:    " << (time_info_det_detailed[4] / img_num) << " ms" << std::endl;
+      std::cout << "  Dilation operation:     " << (time_info_det_detailed[5] / img_num) << " ms" << std::endl;
+      std::cout << "  BoxesFromBitmap:        " << (time_info_det_detailed[6] / img_num) << " ms" << std::endl;
+      std::cout << "  FilterTagDetRes:        " << (time_info_det_detailed[7] / img_num) << " ms" << std::endl;
+      
+      // Use the same calculation as Overall Summary for consistency
+      double det_total = this->time_info_det[0] + this->time_info_det[1] + this->time_info_det[2];
+      std::cout << "  Detection Total:        " << (det_total / img_num) << " ms" << std::endl;
+      
+      // Also show detailed breakdown total for comparison
+      double detailed_total = std::accumulate(time_info_det_detailed.begin(), time_info_det_detailed.end(), 0.0);
+      std::cout << "  (Detailed ops total:    " << (detailed_total / img_num) << " ms)" << std::endl;
+    }
+    
+    std::cout << std::endl;
+    
+    // Recognition detailed timing
+    if (std::accumulate(time_info_rec_detailed.begin(), time_info_rec_detailed.end(), 0.0) > 0)
+    {
+      std::cout << "Recognition Module (per image average):" << std::endl;
+      std::cout << "  Resize operation:       " << (time_info_rec_detailed[0] / img_num) << " ms" << std::endl;
+      std::cout << "  Normalize operation:    " << (time_info_rec_detailed[1] / img_num) << " ms" << std::endl;
+      std::cout << "  Permute operation:      " << (time_info_rec_detailed[2] / img_num) << " ms" << std::endl;
+      std::cout << "  Inference:              " << (time_info_rec_detailed[3] / img_num) << " ms" << std::endl;
+      std::cout << "  Postprocess:            " << (time_info_rec_detailed[4] / img_num) << " ms" << std::endl;
+      
+      // Use the same calculation as Overall Summary for consistency
+      double rec_total = this->time_info_rec[0] + this->time_info_rec[1] + this->time_info_rec[2];
+      std::cout << "  Recognition Total:      " << (rec_total / img_num) << " ms" << std::endl;
+      
+      // Also show detailed breakdown total for comparison
+      double detailed_total = std::accumulate(time_info_rec_detailed.begin(), time_info_rec_detailed.end(), 0.0);
+      std::cout << "  (Detailed ops total:    " << (detailed_total / img_num) << " ms)" << std::endl;
+    }
+    
+    std::cout << std::endl;
+    
+    // Overall timing
+    double overall_det = this->time_info_det[0] + this->time_info_det[1] + this->time_info_det[2];
+    double overall_rec = this->time_info_rec[0] + this->time_info_rec[1] + this->time_info_rec[2];
+    double overall_total = overall_det + overall_rec;
+    
+    std::cout << "Overall Summary (per image average):" << std::endl;
+    std::cout << "  Detection Total:        " << (overall_det / img_num) << " ms" << std::endl;
+    std::cout << "  Recognition Total:      " << (overall_rec / img_num) << " ms" << std::endl;
+    std::cout << "  End-to-End Total:       " << (overall_total / img_num) << " ms" << std::endl;
+    std::cout << "================================================================" << std::endl;
   }
 
 } // namespace PaddleOCR

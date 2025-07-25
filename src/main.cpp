@@ -16,7 +16,6 @@
 
 #include <include/args.h>
 #include <include/paddleocr.h>
-#include <include/data_saver.h>
 
 #include <iostream>
 #include <vector>
@@ -220,8 +219,6 @@ void check_params()
 
 std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool verbose = true)
 {
-
-  std::cout << "[DEBUG] Processing image: " << image_path << std::endl;
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
   if (!img.data)
   {
@@ -248,9 +245,6 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
     // Reset OCR timer before processing to get accurate timing for this image
     ocr.reset_timer();
 
-    // Set current image path for debugging
-    PaddleOCR::g_current_image_path = image_path;
-
     // OCR processing timing
     auto start_ocr = std::chrono::high_resolution_clock::now();
     std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
@@ -260,50 +254,11 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
     std::cout << "OCR processing: " << ocr_duration.count() << " ms" << std::endl;
     std::cout << "Text boxes found: " << ocr_results.size() << std::endl;
 
-    // Save image with text boxes if debug mode is enabled
-    std::cout << "[DEBUG] FLAGS_save_debug_data: " << FLAGS_save_debug_data << std::endl;
-    std::cout << "[DEBUG] OCR results size: " << ocr_results.size() << std::endl;
-    if (FLAGS_save_debug_data && !ocr_results.empty())
-    {
-        std::cout << "[DEBUG] Entering image saving block" << std::endl;
-        // Convert OCRPredictResult boxes to the format expected by SaveImageWithTextBoxes
-        std::vector<std::vector<std::vector<int>>> boxes_for_drawing;
-        for (const auto &result : ocr_results)
-        {
-            if (result.box.size() == 4) // Valid box with 4 points
-            {
-                std::vector<std::vector<int>> box_points;
-                for (const auto &point : result.box)
-                {
-                    if (point.size() >= 2) // Valid point with x, y coordinates
-                    {
-                        box_points.push_back({point[0], point[1]});
-                    }
-                }
-                if (box_points.size() == 4)
-                {
-                    boxes_for_drawing.push_back(box_points);
-                }
-            }
-        }
-        
-        std::cout << "[DEBUG] Boxes for drawing: " << boxes_for_drawing.size() << std::endl;
-        std::cout << "[DEBUG] Output directory: " << FLAGS_output << std::endl;
-        std::cout << "[DEBUG] Image path: " << image_path << std::endl;
-        
-        if (!boxes_for_drawing.empty())
-        {
-            std::cout << "[DEBUG] Calling SaveImageWithTextBoxes..." << std::endl;
-            DataSaver::SaveImageWithTextBoxes(img, boxes_for_drawing, image_path, FLAGS_output);
-        }
-        else
-        {
-            std::cout << "[DEBUG] No boxes for drawing!" << std::endl;
-        }
-    }
-
     // Print detailed OCR timing breakdown (det/rec)
     ocr.benchmark_log(1);
+    
+    // Print detailed timing breakdown for each operation
+    ocr.detailed_benchmark_log(1);
 
     // Post-processing timing
     auto start_post = std::chrono::high_resolution_clock::now();
@@ -330,63 +285,6 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
     // Evaluation mode - no verbose output
     std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
 
-    // Save image with text boxes if debug mode is enabled (for non-verbose mode)
-    std::cout << "[DEBUG] Non-verbose mode - About to check save conditions - FLAGS_save_debug_data: " << FLAGS_save_debug_data << ", ocr_results.empty(): " << ocr_results.empty() << std::endl;
-    if (FLAGS_save_debug_data && !ocr_results.empty())
-    {
-        std::cout << "[DEBUG] Entering image saving block for: " << image_path << std::endl;
-        // Convert OCRPredictResult boxes to the format expected by SaveImageWithTextBoxes
-        std::vector<std::vector<std::vector<int>>> boxes_for_drawing;
-        for (const auto &result : ocr_results)
-        {
-            if (result.box.size() == 4) // Valid box with 4 points
-            {
-                std::vector<std::vector<int>> box_points;
-                for (const auto &point : result.box)
-                {
-                    if (point.size() >= 2) // Valid point with x, y coordinates
-                    {
-                        box_points.push_back({point[0], point[1]});
-                    }
-                }
-                if (box_points.size() == 4)
-                {
-                    boxes_for_drawing.push_back(box_points);
-                }
-            }
-        }
-        
-        std::cout << "[DEBUG] Boxes for drawing: " << boxes_for_drawing.size() << std::endl;
-        std::cout << "[DEBUG] Output directory: " << FLAGS_output << std::endl;
-        std::cout << "[DEBUG] Image path: " << image_path << std::endl;
-        
-        if (!boxes_for_drawing.empty())
-        {
-            std::cout << "[DEBUG] Calling SaveImageWithTextBoxes..." << std::endl;
-            DataSaver::SaveImageWithTextBoxes(img, boxes_for_drawing, image_path, FLAGS_output);
-        }
-        else
-        {
-            std::cout << "[DEBUG] No boxes for drawing!" << std::endl;
-        }
-    }
-
-    // Print detection text box coordinates
-    for (size_t i = 0; i < ocr_results.size(); ++i)
-    {
-      const auto &res = ocr_results[i];
-      std::cout << "Text box " << i + 1 << ": \"" << res.text << "\"" << std::endl;
-      std::cout << "  Coordinates: ";
-      for (size_t j = 0; j < res.box.size(); ++j)
-      {
-        if (j > 0)
-          std::cout << " -> ";
-        std::cout << "(" << res.box[j][0] << "," << res.box[j][1] << ")";
-      }
-      std::cout << std::endl;
-      std::cout << "  Score: " << res.score << std::endl;
-    }
-
     std::string result_text = "";
     for (const auto &res : ocr_results)
     {
@@ -400,8 +298,6 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
 void run_batch_processing_mode()
 {
   std::cout << "Starting PaddleOCR batch processing mode..." << std::endl;
-  std::cout << "[DEBUG] FLAGS_save_debug_data at startup: " << FLAGS_save_debug_data << std::endl;
-  std::cout << "[DEBUG] FLAGS_output: " << FLAGS_output << std::endl;
 
   // Initialize memory monitor
   initMemoryMonitor();
@@ -506,6 +402,9 @@ void run_batch_processing_mode()
   std::cout << "  Maximum increase: " << (max_memory.current_mb - initial_memory.current_mb) << " MB" << std::endl;
   std::cout << "Results saved to: " << FLAGS_output << std::endl;
   std::cout << "=================================================================" << std::endl;
+  
+  // Print detailed timing breakdown for batch processing
+  ocr.detailed_benchmark_log(total_items);
 }
 
 void run_inference_mode(std::vector<cv::String> &cv_all_img_names)

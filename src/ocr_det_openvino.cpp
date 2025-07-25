@@ -50,12 +50,11 @@ namespace PaddleOCR
 
             // Configure device-specific settings
             // ov::AnyMap config;
-            ov::AnyMap config = {{"CACHE_DIR", "./cache"},
-                                 {"PERFORMANCE_HINT", "LATENCY"}};
+            ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
             if (device_ == "CPU")
             {
                 // CPU-specific configurations
-                config["CPU_RUNTIME_CACHE_CAPACITY"] = "10";
+                config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -87,6 +86,7 @@ namespace PaddleOCR
             img.copyTo(srcimg);
 
             auto preprocess_start = std::chrono::steady_clock::now();
+            auto resize_start = std::chrono::steady_clock::now();
 
             // Preprocessing - special handling for NPU device
             if (device_ == "NPU")
@@ -128,11 +128,19 @@ namespace PaddleOCR
                                      this->limit_side_len_, ratio_h, ratio_w, false);
             }
 
+            auto resize_end = std::chrono::steady_clock::now();
+            auto normalize_start = std::chrono::steady_clock::now();
+
             this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
+
+            auto normalize_end = std::chrono::steady_clock::now();
+            auto permute_start = std::chrono::steady_clock::now();
 
             std::vector<float> input(1 * 3 * resize_img.rows * resize_img.cols, 0.0f);
 
             this->permute_op_.Run(resize_img, input.data());
+
+            auto permute_end = std::chrono::steady_clock::now();
 
             auto preprocess_end = std::chrono::steady_clock::now();
 
@@ -188,10 +196,10 @@ namespace PaddleOCR
             int n3 = static_cast<int>(output_shape[3]);
             int n = n2 * n3;
 
-            std::cout << "[DEBUG] Original image size: " << img.cols << "x" << img.rows << std::endl;
-            std::cout << "[DEBUG] Resized image size: " << resize_img.cols << "x" << resize_img.rows << std::endl;
-            std::cout << "[DEBUG] Model output size: " << n3 << "x" << n2 << std::endl;
-            std::cout << "[DEBUG] srcimg size passed to BoxesFromBitmap: " << srcimg.cols << "x" << srcimg.rows << std::endl;
+            // std::cout << "[DEBUG] Original image size: " << img.cols << "x" << img.rows << std::endl;
+            // std::cout << "[DEBUG] Resized image size: " << resize_img.cols << "x" << resize_img.rows << std::endl;
+            // std::cout << "[DEBUG] Model output size: " << n3 << "x" << n2 << std::endl;
+            // std::cout << "[DEBUG] srcimg size passed to BoxesFromBitmap: " << srcimg.cols << "x" << srcimg.rows << std::endl;
 
             std::vector<float> pred(n, 0.0);
             std::vector<unsigned char> cbuf(n, ' ');
@@ -205,66 +213,96 @@ namespace PaddleOCR
             cv::Mat cbuf_map(n2, n3, CV_8UC1, (unsigned char *)cbuf.data());
             cv::Mat pred_map(n2, n3, CV_32F, (float *)pred.data());
 
+            auto threshold_start = std::chrono::steady_clock::now();
             const double threshold = this->det_db_thresh_ * 255;
             const double maxvalue = 255;
             cv::Mat bit_map;
             cv::threshold(cbuf_map, bit_map, threshold, maxvalue, cv::THRESH_BINARY);
+            auto threshold_end = std::chrono::steady_clock::now();
 
+            auto dilation_start = std::chrono::steady_clock::now();
             if (this->use_dilation_)
             {
                 cv::Mat dila_ele = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
                 cv::dilate(bit_map, bit_map, dila_ele);
             }
+            auto dilation_end = std::chrono::steady_clock::now();
 
+            auto boxes_from_bitmap_start = std::chrono::steady_clock::now();
             boxes = std::move(post_processor_.BoxesFromBitmap(
                 pred_map, bit_map, srcimg.cols, srcimg.rows));
+            auto boxes_from_bitmap_end = std::chrono::steady_clock::now();
 
-            // Print boxes for debugging
-            std::cout << "[DEBUG] BoxesFromBitmap returned " << boxes.size() << " boxes:" << std::endl;
-            for (size_t i = 0; i < boxes.size(); ++i)
-            {
-                std::cout << "  Box " << i << ": ";
-                for (size_t j = 0; j < boxes[i].size(); ++j)
-                {
-                    if (j > 0)
-                        std::cout << " -> ";
-                    std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
-                }
-                std::cout << std::endl;
-            }
+            // // Print boxes for debugging
+            // // std::cout << "[DEBUG] BoxesFromBitmap returned " << boxes.size() << " boxes:" << std::endl;
+            // for (size_t i = 0; i < boxes.size(); ++i)
+            // {
+            //     std::cout << "  Box " << i << ": ";
+            //     for (size_t j = 0; j < boxes[i].size(); ++j)
+            //     {
+            //         if (j > 0)
+            //             std::cout << " -> ";
+            //         std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
+            //     }
+            //     std::cout << std::endl;
+            // }
 
+            auto filter_tag_start = std::chrono::steady_clock::now();
             post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, srcimg);
-            
-            // Print boxes after FilterTagDetRes for debugging
-            std::cout << "[DEBUG] After FilterTagDetRes, final boxes:" << std::endl;
-            for (size_t i = 0; i < boxes.size(); ++i)
-            {
-                std::cout << "  Final Box " << i << ": ";
-                for (size_t j = 0; j < boxes[i].size(); ++j)
-                {
-                    if (j > 0)
-                        std::cout << " -> ";
-                    std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
-                }
-                std::cout << std::endl;
-            }
-            
+            auto filter_tag_end = std::chrono::steady_clock::now();
+
+            // // Print boxes after FilterTagDetRes for debugging
+            //  std::cout << "[DEBUG] After FilterTagDetRes, final boxes:" << std::endl;
+            // for (size_t i = 0; i < boxes.size(); ++i)
+            // {
+            //     std::cout << "  Final Box " << i << ": ";
+            //     for (size_t j = 0; j < boxes[i].size(); ++j)
+            //     {
+            //         if (j > 0)
+            //             std::cout << " -> ";
+            //         std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
+            //     }
+            //     std::cout << std::endl;
+            // }
+
             auto postprocess_end = std::chrono::steady_clock::now();
 
-            // Calculate timing
-            std::chrono::duration<float> preprocess_diff = preprocess_end - preprocess_start;
-            times.emplace_back(preprocess_diff.count() * 1000);
+            // Calculate detailed timing
+            std::chrono::duration<float> resize_diff = resize_end - resize_start;
+            std::chrono::duration<float> normalize_diff = normalize_end - normalize_start;
+            std::chrono::duration<float> permute_diff = permute_end - permute_start;
             std::chrono::duration<float> inference_diff = inference_end - inference_start;
-            times.emplace_back(inference_diff.count() * 1000);
-            std::chrono::duration<float> postprocess_diff = postprocess_end - postprocess_start;
-            times.emplace_back(postprocess_diff.count() * 1000);
+            std::chrono::duration<float> threshold_diff = threshold_end - threshold_start;
+            std::chrono::duration<float> dilation_diff = dilation_end - dilation_start;
+            std::chrono::duration<float> boxes_from_bitmap_diff = boxes_from_bitmap_end - boxes_from_bitmap_start;
+            std::chrono::duration<float> filter_tag_diff = filter_tag_end - filter_tag_start;
+
+            // Store detailed timings (in milliseconds)
+            // [resize, normalize, permute, inference, threshold, dilation, boxes_from_bitmap, filter_tag]
+            times.resize(11);                                 // 8 detailed + 3 summary
+            times[0] = resize_diff.count() * 1000;            // Detailed: resize
+            times[1] = normalize_diff.count() * 1000;         // Detailed: normalize
+            times[2] = permute_diff.count() * 1000;           // Detailed: permute
+            times[3] = inference_diff.count() * 1000;         // Detailed: inference
+            times[4] = threshold_diff.count() * 1000;         // Detailed: threshold
+            times[5] = dilation_diff.count() * 1000;          // Detailed: dilation
+            times[6] = boxes_from_bitmap_diff.count() * 1000; // Detailed: boxes_from_bitmap
+            times[7] = filter_tag_diff.count() * 1000;        // Detailed: filter_tag
+
+            // Calculate summary timing (for backward compatibility)
+            std::chrono::duration<float> preprocess_diff = permute_end - preprocess_start;
+            std::chrono::duration<float> postprocess_diff = postprocess_end - inference_end;
+
+            times[8] = preprocess_diff.count() * 1000;   // Summary: preprocess
+            times[9] = inference_diff.count() * 1000;    // Summary: inference
+            times[10] = postprocess_diff.count() * 1000; // Summary: postprocess
         }
         catch (const std::exception &e)
         {
             std::cerr << "[ERROR] Exception in DBDetectorOpenVINO::Run: " << e.what() << std::endl;
             // Ensure we have valid output even on exception
             times.clear();
-            times.resize(3, 0.0);
+            times.resize(11, 0.0); // 8 detailed + 3 summary
             // Exit to avoid further processing errors
             exit(1);
         }
@@ -273,7 +311,7 @@ namespace PaddleOCR
             std::cerr << "[ERROR] Unknown exception in DBDetectorOpenVINO::Run" << std::endl;
             // Ensure we have valid output even on exception
             times.clear();
-            times.resize(3, 0.0);
+            times.resize(11, 0.0); // 8 detailed + 3 summary
             // Exit to avoid further processing errors
             exit(1);
         }
