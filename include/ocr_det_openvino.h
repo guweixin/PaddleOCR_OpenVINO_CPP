@@ -59,6 +59,9 @@ namespace PaddleOCR
                  std::vector<std::vector<std::vector<int>>> &boxes,
                  std::vector<double> &times) noexcept;
 
+        // Print final detection memory transfer statistics
+        void PrintFinalDetectionStats() noexcept;
+
     private:
         ov::Core core_;
         ov::CompiledModel compiled_model_;

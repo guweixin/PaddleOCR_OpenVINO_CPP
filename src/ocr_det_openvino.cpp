@@ -26,6 +26,14 @@
 
 namespace PaddleOCR
 {
+    // Static variables for accumulating detection timing statistics
+    static double total_det_shape_time = 0.0;
+    static double total_det_cpu_to_gpu_time = 0.0;
+    static double total_det_pure_inference_time = 0.0;
+    static double total_det_gpu_to_cpu_time = 0.0;
+    static size_t total_det_input_size_mb = 0;
+    static size_t total_det_output_size_mb = 0;
+    static int total_det_images = 0;
 
     void DBDetectorOpenVINO::LoadModel(const std::string &model_path) noexcept
     {
@@ -49,12 +57,20 @@ namespace PaddleOCR
             std::cout << "[OpenVINO] Model file loaded successfully" << std::endl;
 
             // Configure device-specific settings
-            // ov::AnyMap config;
             ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
             if (device_ == "CPU")
             {
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
+            }
+            else if (device_ == "GPU")
+            {
+                // GPU-specific optimizations for maximum performance
+                config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
+                config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
+                config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
+                config["GPU_HOST_TASK_PRIORITY"] = "HIGH";
+                config["GPU_QUEUE_PRIORITY"] = "HIGH";
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -85,10 +101,18 @@ namespace PaddleOCR
             cv::Mat resize_img;
             img.copyTo(srcimg);
 
+            // Memory transfer timing variables for detection
+            double shape_time = 0.0;
+            double cpu_to_gpu_time = 0.0;
+            double pure_inference_time = 0.0;
+            double gpu_to_cpu_time = 0.0;
+            size_t input_size_mb = 0;
+            size_t output_size_mb = 0;
+
             auto preprocess_start = std::chrono::steady_clock::now();
             auto resize_start = std::chrono::steady_clock::now();
 
-            // Preprocessing - special handling for NPU device
+            // Preprocessing - device-specific optimizations
             if (device_ == "NPU")
             {
                 // NPU specific preprocessing: resize to 960x960 with aspect ratio preserved and white padding
@@ -123,7 +147,7 @@ namespace PaddleOCR
             }
             else
             {
-                // Standard preprocessing for CPU/GPU
+                // Standard preprocessing for CPU/GPU - use dynamic sizing for better performance
                 this->resize_op_.Run(img, resize_img, this->limit_type_,
                                      this->limit_side_len_, ratio_h, ratio_w, false);
             }
@@ -144,30 +168,68 @@ namespace PaddleOCR
 
             auto preprocess_end = std::chrono::steady_clock::now();
 
-            // Inference with OpenVINO
+            // Inference with OpenVINO - optimized for GPU with detailed timing
             auto inference_start = std::chrono::steady_clock::now();
 
-            // Get input tensor
+            // Get input tensor and optimize data transfer
             auto input_tensor = infer_request_.get_input_tensor();
 
-            // Set input shape and copy data
-            input_tensor.set_shape({1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)});
+            // Set input shape efficiently
+            auto shape_start = std::chrono::steady_clock::now();
+            ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+            if (input_tensor.get_shape() != target_shape)
+            {
+                input_tensor.set_shape(target_shape);
+            }
+            auto shape_end = std::chrono::steady_clock::now();
 
+            // CPU to GPU data transfer timing
+            auto cpu_to_gpu_start = std::chrono::steady_clock::now();
             float *input_data = input_tensor.data<float>();
-            std::memcpy(input_data, input.data(), input.size() * sizeof(float));
+            if (input_data && !input.empty())
+            {
+                std::copy(input.begin(), input.end(), input_data);
+            }
+            auto cpu_to_gpu_end = std::chrono::steady_clock::now();
 
-            // Run inference
+            // Pure inference timing
+            auto pure_inference_start = std::chrono::steady_clock::now();
             infer_request_.infer();
+            auto pure_inference_end = std::chrono::steady_clock::now();
 
-            // Get output tensor
+            // GPU to CPU data transfer timing
+            auto gpu_to_cpu_start = std::chrono::steady_clock::now();
             auto output_tensor = infer_request_.get_output_tensor();
             auto output_shape = output_tensor.get_shape();
 
-            int out_num = std::accumulate(output_shape.begin(), output_shape.end(), 1, std::multiplies<size_t>());
-            std::vector<float> out_data(out_num);
+            size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+            std::vector<float> out_data;
+            out_data.reserve(out_num);
+            out_data.resize(out_num);
 
+            // Direct memory copy from GPU
             float *output_data = output_tensor.data<float>();
-            std::memcpy(out_data.data(), output_data, out_num * sizeof(float));
+            std::copy(output_data, output_data + out_num, out_data.begin());
+            auto gpu_to_cpu_end = std::chrono::steady_clock::now();
+
+            // Calculate detailed memory transfer timings
+            shape_time = std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
+            cpu_to_gpu_time = std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
+            pure_inference_time = std::chrono::duration<double, std::milli>(pure_inference_end - pure_inference_start).count();
+            gpu_to_cpu_time = std::chrono::duration<double, std::milli>(gpu_to_cpu_end - gpu_to_cpu_start).count();
+
+            // Calculate data sizes for statistics
+            input_size_mb = (input.size() * sizeof(float)) / (1024 * 1024);
+            output_size_mb = (out_num * sizeof(float)) / (1024 * 1024);
+
+            // Accumulate timing statistics for detection
+            total_det_shape_time += shape_time;
+            total_det_cpu_to_gpu_time += cpu_to_gpu_time;
+            total_det_pure_inference_time += pure_inference_time;
+            total_det_gpu_to_cpu_time += gpu_to_cpu_time;
+            total_det_input_size_mb += input_size_mb;
+            total_det_output_size_mb += output_size_mb;
+            total_det_images++;
 
             // Save debug data if enabled
             if (FLAGS_save_debug_data)
@@ -314,6 +376,35 @@ namespace PaddleOCR
             times.resize(11, 0.0); // 8 detailed + 3 summary
             // Exit to avoid further processing errors
             exit(1);
+        }
+    }
+
+    // Function to print final detection memory transfer statistics
+    void DBDetectorOpenVINO::PrintFinalDetectionStats() noexcept
+    {
+        if (total_det_images > 0)
+        {
+            printf("\n=== Detection Memory Transfer Final Statistics ===\n");
+            printf("Detection processed %d images\n", total_det_images);
+            printf("Detection Memory Transfer Timing (per image averages):\n");
+            printf("  Shape setup:     %.2f ms per image\n", total_det_shape_time / total_det_images);
+            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+                   total_det_cpu_to_gpu_time / total_det_images,
+                   (double)total_det_input_size_mb / total_det_images);
+            printf("  Pure inference:  %.2f ms per image\n", total_det_pure_inference_time / total_det_images);
+            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+                   total_det_gpu_to_cpu_time / total_det_images,
+                   (double)total_det_output_size_mb / total_det_images);
+            
+            double avg_total_transfer = (total_det_cpu_to_gpu_time + total_det_gpu_to_cpu_time) / total_det_images;
+            double avg_total_time = (total_det_shape_time + total_det_cpu_to_gpu_time + total_det_pure_inference_time + total_det_gpu_to_cpu_time) / total_det_images;
+            double avg_pure_inference = total_det_pure_inference_time / total_det_images;
+            
+            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n", 
+                   avg_total_transfer, (avg_total_transfer / avg_total_time) * 100);
+            printf("  Memory transfer overhead: %.1f%% of pure inference time\n",
+                   (avg_total_transfer / avg_pure_inference) * 100);
+            printf("==================================================\n\n");
         }
     }
 

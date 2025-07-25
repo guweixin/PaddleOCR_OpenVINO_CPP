@@ -129,12 +129,12 @@ void check_params()
   }
   if (FLAGS_rec)
   {
-    std::cout
-        << "In PP-OCRv3, rec_image_shape parameter defaults to '3, 48, 320',"
-           "if you are using recognition model with PP-OCRv2 or an older "
-           "version, "
-           "please set --rec_image_shape='3,32,320"
-        << std::endl;
+    // std::cout
+    //     << "In PP-OCRv3, rec_image_shape parameter defaults to '3, 48, 320',"
+    //        "if you are using recognition model with PP-OCRv2 or an older "
+    //        "version, "
+    //        "please set --rec_image_shape='3,32,320"
+    //     << std::endl;
     if (FLAGS_rec_model_dir.empty() || FLAGS_image_dir.empty())
     {
       std::cout << "Usage[rec]: ./ppocr "
@@ -256,7 +256,7 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool ver
 
     // Print detailed OCR timing breakdown (det/rec)
     ocr.benchmark_log(1);
-    
+
     // Print detailed timing breakdown for each operation
     ocr.detailed_benchmark_log(1);
 
@@ -402,7 +402,7 @@ void run_batch_processing_mode()
   std::cout << "  Maximum increase: " << (max_memory.current_mb - initial_memory.current_mb) << " MB" << std::endl;
   std::cout << "Results saved to: " << FLAGS_output << std::endl;
   std::cout << "=================================================================" << std::endl;
-  
+
   // Print detailed timing breakdown for batch processing
   ocr.detailed_benchmark_log(total_items);
 }

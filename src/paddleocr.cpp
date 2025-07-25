@@ -18,6 +18,7 @@
 #include <include/paddleocr.h>
 #include <include/ocr_interface.h>
 #include <include/data_saver.h>
+#include <include/ocr_det_openvino.h>
 
 #include <auto_log/autolog.h>
 #include <numeric>
@@ -361,6 +362,20 @@ namespace PaddleOCR
     std::cout << "  Recognition Total:      " << (overall_rec / img_num) << " ms" << std::endl;
     std::cout << "  End-to-End Total:       " << (overall_total / img_num) << " ms" << std::endl;
     std::cout << "================================================================" << std::endl;
+
+    // Print memory transfer statistics for OpenVINO modules
+    if (FLAGS_inference_framework == "openvino")
+    {
+      // Print detection memory transfer statistics
+      if (this->pri_->detector_)
+      {
+        auto* det_openvino = dynamic_cast<DBDetectorOpenVINO*>(this->pri_->detector_.get());
+        if (det_openvino)
+        {
+          det_openvino->PrintFinalDetectionStats();
+        }
+      }
+    }
   }
 
 } // namespace PaddleOCR
