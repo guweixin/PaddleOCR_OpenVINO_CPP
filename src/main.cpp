@@ -217,82 +217,24 @@ void check_params()
   std::cout << "===============================" << std::endl;
 }
 
-std::string ocr_single_image(PPOCR &ocr, const std::string &image_path, bool verbose = true)
+std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
 {
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
   if (!img.data)
   {
-    if (verbose)
-    {
-      std::cerr << "[ERROR] image read failed! image path: " << image_path << std::endl;
-    }
+    std::cerr << "[ERROR] image read failed! image path: " << image_path << std::endl;
     return "";
   }
 
-  if (verbose)
+  std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
+
+  std::string result_text = "";
+  for (const auto &res : ocr_results)
   {
-    auto start_time_total = std::chrono::high_resolution_clock::now();
-
-    // Image loading timing
-    auto start_load = std::chrono::high_resolution_clock::now();
-    auto end_load = std::chrono::high_resolution_clock::now();
-    auto load_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_load - start_load);
-
-    std::cout << "\n=== Processing: " << image_path << " ===" << std::endl;
-    std::cout << "Image size: " << img.rows << "x" << img.cols << " pixels" << std::endl;
-    std::cout << "Image loading: " << load_duration.count() << " ms" << std::endl;
-
-    // Reset OCR timer before processing to get accurate timing for this image
-    ocr.reset_timer();
-
-    // OCR processing timing
-    auto start_ocr = std::chrono::high_resolution_clock::now();
-    std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
-    auto end_ocr = std::chrono::high_resolution_clock::now();
-    auto ocr_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_ocr - start_ocr);
-
-    std::cout << "OCR processing: " << ocr_duration.count() << " ms" << std::endl;
-    std::cout << "Text boxes found: " << ocr_results.size() << std::endl;
-
-    // Print detailed OCR timing breakdown (det/rec)
-    ocr.benchmark_log(1);
-
-    // Print detailed timing breakdown for each operation
-    ocr.detailed_benchmark_log(1);
-
-    // Post-processing timing
-    auto start_post = std::chrono::high_resolution_clock::now();
-    std::string result_text = "";
-    for (const auto &res : ocr_results)
-    {
-      result_text += res.text + "\n";
-    }
-    auto end_post = std::chrono::high_resolution_clock::now();
-    auto post_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_post - start_post);
-
-    auto end_time_total = std::chrono::high_resolution_clock::now();
-    auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_total - start_time_total);
-
-    std::cout << "Post-processing: " << post_duration.count() << " ms" << std::endl;
-    std::cout << "Total time: " << total_duration.count() << " ms" << std::endl;
-    std::cout << "==========================================\n"
-              << std::endl;
-
-    return result_text;
+    result_text += res.text + "\n";
   }
-  else
-  {
-    // Evaluation mode - no verbose output
-    std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
 
-    std::string result_text = "";
-    for (const auto &res : ocr_results)
-    {
-      result_text += res.text + "\n";
-    }
-
-    return result_text;
-  }
+  return result_text;
 }
 
 void run_batch_processing_mode()
@@ -364,7 +306,7 @@ void run_batch_processing_mode()
 
     // Measure inference time (excluding file I/O time)
     auto start_time = std::chrono::high_resolution_clock::now();
-    std::string image_text = ocr_single_image(ocr, cv_all_img_names[i], false); // non-verbose mode
+    std::string image_text = ocr_single_image(ocr, cv_all_img_names[i]); // non- mode
     auto end_time = std::chrono::high_resolution_clock::now();
 
     double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
@@ -402,76 +344,6 @@ void run_batch_processing_mode()
   std::cout << "  Maximum increase: " << (max_memory.current_mb - initial_memory.current_mb) << " MB" << std::endl;
   std::cout << "Results saved to: " << FLAGS_output << std::endl;
   std::cout << "=================================================================" << std::endl;
-
-  // Print detailed timing breakdown for batch processing
-  ocr.detailed_benchmark_log(total_items);
-}
-
-void run_inference_mode(std::vector<cv::String> &cv_all_img_names)
-{
-  std::cout << "Starting PaddleOCR inference mode..." << std::endl;
-
-  PPOCR ocr;
-
-  double sum_inference_time = 0.0;
-  size_t processed_count = 0;
-
-  for (int i = 0; i < cv_all_img_names.size(); ++i)
-  {
-    cv::Mat img = cv::imread(cv_all_img_names[i], cv::IMREAD_COLOR);
-    if (!img.data)
-    {
-      std::cerr << "[ERROR] image read failed! image path: " << cv_all_img_names[i] << std::endl;
-      continue;
-    }
-
-    std::cout << "Processing: " << cv_all_img_names[i] << std::endl;
-
-    // Measure inference time
-    auto start_time = std::chrono::high_resolution_clock::now();
-    std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
-    auto end_time = std::chrono::high_resolution_clock::now();
-
-    double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
-    sum_inference_time += inference_time;
-    processed_count++;
-
-    std::cout << "Inference time: " << std::fixed << std::setprecision(2) << inference_time << " ms" << std::endl;
-
-    // Save results (time not included in inference time)
-    std::string base_name = cv_all_img_names[i].substr(cv_all_img_names[i].find_last_of("/\\") + 1);
-    base_name = base_name.substr(0, base_name.find_last_of('.'));
-    std::string output_file = FLAGS_output + "/" + base_name + ".txt";
-
-    std::ofstream out_file(output_file);
-    if (out_file.is_open())
-    {
-      for (const auto &res : ocr_results)
-      {
-        out_file << res.text << std::endl;
-      }
-      out_file.close();
-      std::cout << "Results saved to: " << output_file << std::endl;
-    }
-
-    // Print results to console
-    Utility::print_result(ocr_results);
-
-    if (FLAGS_visualize && FLAGS_det)
-    {
-      std::string file_name = Utility::basename(cv_all_img_names[i]);
-      Utility::VisualizeBboxes(img, ocr_results, FLAGS_output + "/" + file_name);
-    }
-  }
-
-  if (processed_count > 0)
-  {
-    std::cout << std::endl;
-    std::cout << "======================== Inference Results ========================" << std::endl;
-    std::cout << "Average inference time per image: " << std::fixed << std::setprecision(2)
-              << (sum_inference_time / processed_count) << " ms" << std::endl;
-    std::cout << "================================================================" << std::endl;
-  }
 }
 
 int main(int argc, char **argv)

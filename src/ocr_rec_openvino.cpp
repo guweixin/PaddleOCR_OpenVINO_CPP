@@ -98,50 +98,13 @@ namespace PaddleOCR
         {
             auto preprocess_start = std::chrono::steady_clock::now();
 
-            // Initialize timing info - provide detailed timing values
+            // Initialize timing info - provide basic timing values
             times.clear();
-            times.resize(8, 0.0); // 5 detailed + 3 summary
+            times.resize(8, 0.0);
 
             // Clear output vectors to avoid accumulation
             rec_texts.clear();
             rec_text_scores.clear();
-
-            // Detailed timing variables
-            auto total_resize_time = 0.0;
-            auto total_normalize_time = 0.0;
-            auto total_permute_time = 0.0;
-            auto total_inference_time = 0.0;
-            auto total_postprocess_time = 0.0;
-
-            // Summary timing variables
-            auto total_preprocess_time = 0.0;
-            auto total_summary_inference_time = 0.0;
-            auto total_summary_postprocess_time = 0.0;
-
-            // Memory transfer timing variables
-            auto total_shape_time = 0.0;
-            auto total_cpu_to_gpu_time = 0.0;
-            auto total_pure_inference_time = 0.0;
-            auto total_gpu_to_cpu_time = 0.0;
-            auto total_input_size_mb = 0.0;
-            auto total_output_size_mb = 0.0;
-            int total_batches = 0;
-
-            // Detailed overhead timing variables
-            auto total_batch_setup_overhead = 0.0;
-            auto total_memory_allocation_overhead = 0.0;
-            auto total_openvino_framework_overhead = 0.0;
-            auto total_data_transfer_overhead = 0.0;
-            auto total_shape_setting_overhead = 0.0;
-            auto total_system_call_overhead = 0.0;
-            
-            // Additional detailed overhead measurements
-            auto total_preprocessing_overhead = 0.0;
-            auto total_loop_overhead = 0.0;
-            auto total_vector_operations_overhead = 0.0;
-            auto total_openvino_api_overhead = 0.0;
-            auto total_ctc_decode_overhead = 0.0;
-            auto total_result_handling_overhead = 0.0;
 
             int img_num = static_cast<int>(img_list.size());
 
@@ -172,44 +135,18 @@ namespace PaddleOCR
 
             // Calculate batches
             int predict_batch_num = 0;
-            
-            // Additional timing variables for detailed analysis
-            double total_batch_setup_time = 0.0;
-            double total_memory_allocation_time = 0.0;
-            double total_image_processing_time = 0.0;
-            double total_tensor_creation_time = 0.0;
-            double total_postprocess_overhead_time = 0.0;
-            
-            for (int idx = 0; idx < img_num; idx += batch_num)
-            {
-                auto batch_start_time = std::chrono::steady_clock::now();
-                
-                predict_batch_num++;
-            }
 
             for (int beg_img_no = 0; beg_img_no < img_num; beg_img_no += batch_num)
             {
-                // === 测量整个批处理循环的开始 ===
-                auto batch_loop_start = std::chrono::steady_clock::now();
-                
-                // === 1. 批处理设置开销测量 ===
-                auto batch_setup_start = std::chrono::steady_clock::now();
                 int end_img_no = std::min(img_num, beg_img_no + batch_num);
                 int batch_size = end_img_no - beg_img_no;
 
-                auto batch_setup_end = std::chrono::steady_clock::now();
-                total_batch_setup_overhead += std::chrono::duration<double, std::milli>(batch_setup_end - batch_setup_start).count();
-
-                // === 2. 内存分配开销测量 ===
-                auto memory_alloc_start = std::chrono::steady_clock::now();
-
                 // NPU specific preprocessing or standard preprocessing
                 std::vector<cv::Mat> norm_img_batch;
-                norm_img_batch.reserve(batch_size);  // 预分配内存
+                norm_img_batch.reserve(batch_size);
                 int batch_width;
 
                 auto memory_alloc_end = std::chrono::steady_clock::now();
-                total_memory_allocation_overhead += std::chrono::duration<double, std::milli>(memory_alloc_end - memory_alloc_start).count();
 
                 if (device_ == "NPU")
                 {
@@ -220,10 +157,6 @@ namespace PaddleOCR
 
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
                     {
-                        // === 预处理间隔开销测量 ===
-                        auto preprocess_gap_start = std::chrono::steady_clock::now();
-                        
-                        auto resize_start = std::chrono::steady_clock::now();
                         cv::Mat resize_img;
                         int original_h = img_list[indices[idx]].rows;
                         int original_w = img_list[indices[idx]].cols;
@@ -250,27 +183,9 @@ namespace PaddleOCR
                         // Copy scaled image to the left-top of the canvas
                         cv::Rect roi(start_x, start_y, new_w, new_h);
                         scaled_img.copyTo(resize_img(roi));
-                        auto resize_end = std::chrono::steady_clock::now();
 
-                        auto normalize_start = std::chrono::steady_clock::now();
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
-                        auto normalize_end = std::chrono::steady_clock::now();
-
-                        // === 向量操作开销测量 ===
-                        auto vector_op_start = std::chrono::steady_clock::now();
                         norm_img_batch.push_back(resize_img);
-                        auto vector_op_end = std::chrono::steady_clock::now();
-                        total_vector_operations_overhead += std::chrono::duration<double, std::milli>(vector_op_end - vector_op_start).count();
-
-                        auto preprocess_gap_end = std::chrono::steady_clock::now();
-                        double gap_time = std::chrono::duration<double, std::milli>(preprocess_gap_end - preprocess_gap_start).count();
-                        double resize_time = std::chrono::duration<double, std::milli>(resize_end - resize_start).count();
-                        double normalize_time = std::chrono::duration<double, std::milli>(normalize_end - normalize_start).count();
-                        total_preprocessing_overhead += gap_time - resize_time - normalize_time;
-
-                        // Accumulate detailed timing
-                        total_resize_time += std::chrono::duration<float>(resize_end - resize_start).count() * 1000;
-                        total_normalize_time += std::chrono::duration<float>(normalize_end - normalize_start).count() * 1000;
                     }
                 }
                 else
@@ -289,189 +204,57 @@ namespace PaddleOCR
                     // Normalize images
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
                     {
-                        // === 预处理间隔开销测量 ===
-                        auto preprocess_gap_start = std::chrono::steady_clock::now();
-                        
-                        auto resize_start = std::chrono::steady_clock::now();
                         cv::Mat resize_img;
                         std::vector<int> rec_image_shape = {3, this->rec_img_h_, this->rec_img_w_};
                         this->resize_op_.Run(img_list[indices[idx]], resize_img, max_wh_ratio, false, rec_image_shape);
-                        auto resize_end = std::chrono::steady_clock::now();
-
-                        auto normalize_start = std::chrono::steady_clock::now();
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
-                        auto normalize_end = std::chrono::steady_clock::now();
-
-                        // === 向量操作开销测量 ===
-                        auto vector_op_start = std::chrono::steady_clock::now();
                         norm_img_batch.push_back(resize_img);
-                        auto vector_op_end = std::chrono::steady_clock::now();
-                        total_vector_operations_overhead += std::chrono::duration<double, std::milli>(vector_op_end - vector_op_start).count();
-
-                        auto preprocess_gap_end = std::chrono::steady_clock::now();
-                        double gap_time = std::chrono::duration<double, std::milli>(preprocess_gap_end - preprocess_gap_start).count();
-                        double resize_time = std::chrono::duration<double, std::milli>(resize_end - resize_start).count();
-                        double normalize_time = std::chrono::duration<double, std::milli>(normalize_end - normalize_start).count();
-                        total_preprocessing_overhead += gap_time - resize_time - normalize_time;
-
-                        // Accumulate detailed timing
-                        total_resize_time += std::chrono::duration<float>(resize_end - resize_start).count() * 1000;
-                        total_normalize_time += std::chrono::duration<float>(normalize_end - normalize_start).count() * 1000;
                     }
 
                     // Calculate actual batch width based on max_wh_ratio (Python version logic)
                     batch_width = int(this->rec_img_h_ * max_wh_ratio);
                 }
 
-                // === 3. 数据准备和张量创建开销测量 ===
-                auto tensor_creation_start = std::chrono::steady_clock::now();
-
-                // Prepare input data - 测量内存分配开销
-                auto vector_alloc_start = std::chrono::steady_clock::now();
+                // Prepare input data
                 std::vector<float> input(batch_size * 3 * this->rec_img_h_ * batch_width, 0.0f);
-                auto vector_alloc_end = std::chrono::steady_clock::now();
-                total_memory_allocation_overhead += std::chrono::duration<double, std::milli>(vector_alloc_end - vector_alloc_start).count();
-
-                auto permute_start = std::chrono::steady_clock::now();
                 this->permute_op_.Run(norm_img_batch, input.data());
-                auto permute_end = std::chrono::steady_clock::now();
-
-                auto tensor_creation_end = std::chrono::steady_clock::now();
-                total_system_call_overhead += std::chrono::duration<double, std::milli>(tensor_creation_end - tensor_creation_start).count();
-
-                // Accumulate permute timing
-                total_permute_time += std::chrono::duration<float>(permute_end - permute_start).count() * 1000;
 
                 auto preprocess_end = std::chrono::steady_clock::now();
 
-                // === 4. OpenVINO API开销测量 ===
-                auto openvino_api_start = std::chrono::steady_clock::now();
-
-                // Inference with OpenVINO - detailed memory transfer timing
+                // Inference with OpenVINO
                 auto inference_start = std::chrono::steady_clock::now();
 
-                // Get input tensor and measure shape setup time
-                auto shape_start = std::chrono::steady_clock::now();
+                // Get input tensor and set shape
                 auto input_tensor = infer_request_.get_input_tensor();
-                auto openvino_api_intermediate1 = std::chrono::steady_clock::now();
-                total_openvino_api_overhead += std::chrono::duration<double, std::milli>(openvino_api_intermediate1 - openvino_api_start).count();
-
-                auto openvino_overhead_start = std::chrono::steady_clock::now();
-                auto openvino_overhead_intermediate = std::chrono::steady_clock::now();
-                total_openvino_framework_overhead += std::chrono::duration<double, std::milli>(openvino_overhead_intermediate - openvino_overhead_start).count();
-
-                // === 5. 形状设置时间测量 ===
-                // Set input shape and copy data
                 input_tensor.set_shape({static_cast<size_t>(batch_size), 3,
                                         static_cast<size_t>(this->rec_img_h_),
                                         static_cast<size_t>(batch_width)});
-                auto shape_end = std::chrono::steady_clock::now();
-                total_shape_setting_overhead += std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
 
-                // === 6. 数据传输时间测量 ===
-                // CPU to GPU data transfer timing
-                auto cpu_to_gpu_start = std::chrono::steady_clock::now();
+                // Copy data and run inference
                 float *input_data = input_tensor.data<float>();
                 std::memcpy(input_data, input.data(), input.size() * sizeof(float));
-                auto cpu_to_gpu_end = std::chrono::steady_clock::now();
-                total_data_transfer_overhead += std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
-
-                // Pure inference timing
-                auto pure_inference_start = std::chrono::steady_clock::now();
                 infer_request_.infer();
-                auto pure_inference_end = std::chrono::steady_clock::now();
 
-                // GPU to CPU data transfer timing
-                auto gpu_to_cpu_start = std::chrono::steady_clock::now();
-                
-                // === OpenVINO API开销测量 ===
-                auto openvino_api_start2 = std::chrono::steady_clock::now();
+                // Get output
                 auto output_tensor = infer_request_.get_output_tensor();
                 auto output_shape = output_tensor.get_shape();
-                auto openvino_api_end2 = std::chrono::steady_clock::now();
-                total_openvino_api_overhead += std::chrono::duration<double, std::milli>(openvino_api_end2 - openvino_api_start2).count();
-
                 size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                
-                // === 向量内存分配开销 ===
-                auto vector_alloc_start2 = std::chrono::steady_clock::now();
-                std::vector<float> predict_batch;
-                predict_batch.reserve(out_num);
-                predict_batch.resize(out_num);
-                auto vector_alloc_end2 = std::chrono::steady_clock::now();
-                total_memory_allocation_overhead += std::chrono::duration<double, std::milli>(vector_alloc_end2 - vector_alloc_start2).count();
 
+                std::vector<float> predict_batch(out_num);
                 float *output_data = output_tensor.data<float>();
                 std::memcpy(predict_batch.data(), output_data, out_num * sizeof(float));
-                auto gpu_to_cpu_end = std::chrono::steady_clock::now();
-                
-                // 继续累计数据传输开销
-                total_data_transfer_overhead += std::chrono::duration<double, std::milli>(gpu_to_cpu_end - gpu_to_cpu_start).count();
 
-                // Calculate detailed memory transfer timings
-                double shape_time = std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
-                double cpu_to_gpu_time = std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
-                double pure_inference_time = std::chrono::duration<double, std::milli>(pure_inference_end - pure_inference_start).count();
-                double gpu_to_cpu_time = std::chrono::duration<double, std::milli>(gpu_to_cpu_end - gpu_to_cpu_start).count();
-                
-                // Calculate data sizes for context
-                size_t input_size_mb = (input.size() * sizeof(float)) / (1024 * 1024);
-                size_t output_size_mb = (out_num * sizeof(float)) / (1024 * 1024);
-
-                // Accumulate memory transfer timing statistics
-                total_shape_time += shape_time;
-                total_cpu_to_gpu_time += cpu_to_gpu_time;
-                total_pure_inference_time += pure_inference_time;
-                total_gpu_to_cpu_time += gpu_to_cpu_time;
-                total_input_size_mb += input_size_mb;
-                total_output_size_mb += output_size_mb;
-                total_batches++;
-
-                // Save debug data if enabled
-                if (FLAGS_save_debug_data)
-                {
-                    static int rec_batch_counter = 0;
-
-                    std::vector<size_t> input_shape_vec = {static_cast<size_t>(batch_size), 3,
-                                                           static_cast<size_t>(this->rec_img_h_),
-                                                           static_cast<size_t>(batch_width)};
-                    std::vector<size_t> output_shape_vec(output_shape.begin(), output_shape.end());
-
-                    // Save recognition model input and output data
-                    DataSaver::SaveRecognitionData(input, input_shape_vec, predict_batch, output_shape_vec,
-                                                   rec_batch_counter, beg_img_no);
-
-                    // // Save individual preprocessed images for debugging
-                    // for (int i = 0; i < batch_size && i < norm_img_batch.size(); ++i)
-                    // {
-                    //     std::string img_filename = "../../debug_data/cpp_preprocessed_img_batch" +
-                    //                                std::to_string(rec_batch_counter) + "_" + std::to_string(beg_img_no + i) + ".npy";
-                    //     DataSaver::SaveMatAsNpy(norm_img_batch[i], img_filename);
-                    // }
-
-                    rec_batch_counter++;
-                }
-
-                auto inference_end = std::chrono::steady_clock::now(); // Postprocessing
+                auto inference_end = std::chrono::steady_clock::now();
                 auto postprocess_start = std::chrono::steady_clock::now();
-
-                // === CTC解码开销测量 ===
-                auto ctc_decode_start = std::chrono::steady_clock::now();
 
                 // Process results for current batch
                 for (int m = 0; m < batch_size; m++)
                 {
-                    // === 结果处理开销测量 ===
-                    auto result_handling_start = std::chrono::steady_clock::now();
-                    
                     int start_idx = m * static_cast<int>(output_shape[1]) * static_cast<int>(output_shape[2]);
                     int end_idx = (m + 1) * static_cast<int>(output_shape[1]) * static_cast<int>(output_shape[2]);
 
                     std::vector<float> single_predict(predict_batch.begin() + start_idx,
                                                       predict_batch.begin() + end_idx);
-
-                    auto result_handling_intermediate = std::chrono::steady_clock::now();
-                    total_result_handling_overhead += std::chrono::duration<double, std::milli>(result_handling_intermediate - result_handling_start).count();
 
                     // CTC decode - based on original ocr_rec.cpp implementation
                     std::string str_res;
@@ -511,8 +294,6 @@ namespace PaddleOCR
                         score = 0.0f;
                     }
 
-                    // === 向量操作开销 ===
-                    auto vector_op_start = std::chrono::steady_clock::now();
                     if (!std::isnan(score) && !str_res.empty())
                     {
                         temp_rec_texts.push_back(str_res);
@@ -523,38 +304,9 @@ namespace PaddleOCR
                         temp_rec_texts.push_back("");
                         temp_rec_text_scores.push_back(0.0f);
                     }
-                    auto vector_op_end = std::chrono::steady_clock::now();
-                    total_vector_operations_overhead += std::chrono::duration<double, std::milli>(vector_op_end - vector_op_start).count();
                 }
 
-                auto ctc_decode_end = std::chrono::steady_clock::now();
-                total_ctc_decode_overhead += std::chrono::duration<double, std::milli>(ctc_decode_end - ctc_decode_start).count();
-
                 auto postprocess_end = std::chrono::steady_clock::now();
-
-                // === 批处理循环结束开销测量 ===
-                auto batch_loop_end = std::chrono::steady_clock::now();
-                double total_batch_time = std::chrono::duration<double, std::milli>(batch_loop_end - batch_loop_start).count();
-                double measured_components_time = total_batch_setup_overhead + total_memory_allocation_overhead + 
-                                                 total_preprocessing_overhead + total_vector_operations_overhead +
-                                                 std::chrono::duration<double, std::milli>(preprocess_end - preprocess_start).count() +
-                                                 std::chrono::duration<double, std::milli>(inference_end - inference_start).count() +
-                                                 total_ctc_decode_overhead + total_result_handling_overhead;
-                total_loop_overhead += std::max(0.0, total_batch_time - measured_components_time);
-
-                // Calculate timing for all batches
-                std::chrono::duration<float> preprocess_diff = preprocess_end - preprocess_start;
-                std::chrono::duration<float> inference_diff = inference_end - inference_start;
-                std::chrono::duration<float> postprocess_diff = postprocess_end - inference_end;
-
-                // Accumulate summary timing
-                total_preprocess_time += preprocess_diff.count() * 1000;
-                total_summary_inference_time += inference_diff.count() * 1000;
-                total_summary_postprocess_time += postprocess_diff.count() * 1000;
-
-                // Accumulate detailed inference and postprocess timing
-                total_inference_time += inference_diff.count() * 1000;
-                total_postprocess_time += postprocess_diff.count() * 1000;
             }
 
             // Reorder results back to original sequence (same as Python version)
@@ -566,136 +318,9 @@ namespace PaddleOCR
                 rec_text_scores[indices[i]] = temp_rec_text_scores[i];
             }
 
-            printf("\n=== Recognition Memory Transfer Analysis ===\n");
-            printf("Total batches processed: %d\n", total_batches);
-            printf("Total images processed: %d\n", img_num);
-            printf("Batch size used: %d\n", this->rec_batch_num_);
-            printf("\nPer-batch Average Memory Transfer Timing:\n");
-            if (total_batches > 0) {
-                printf("  Shape setup:     %.2f ms\n", total_shape_time / total_batches);
-                printf("  CPU->GPU copy:   %.2f ms (avg %.2f MB)\n", total_cpu_to_gpu_time / total_batches, total_input_size_mb / total_batches);
-                printf("  Pure inference:  %.2f ms\n", total_pure_inference_time / total_batches);
-                printf("  GPU->CPU copy:   %.2f ms (avg %.2f MB)\n", total_gpu_to_cpu_time / total_batches, total_output_size_mb / total_batches);
-                printf("  Total transfer:  %.2f ms (%.1f%% of total inference)\n", 
-                       (total_cpu_to_gpu_time + total_gpu_to_cpu_time) / total_batches,
-                       ((total_cpu_to_gpu_time + total_gpu_to_cpu_time) / (total_shape_time + total_cpu_to_gpu_time + total_pure_inference_time + total_gpu_to_cpu_time)) * 100);
-            }
-            printf("\nPer-image Average Memory Transfer Timing:\n");
-            if (img_num > 0) {
-                printf("  Shape setup:     %.2f ms per image\n", total_shape_time / img_num);
-                printf("  CPU->GPU copy:   %.2f ms per image (avg %.2f MB)\n", total_cpu_to_gpu_time / img_num, total_input_size_mb / img_num);
-                printf("  Pure inference:  %.2f ms per image\n", total_pure_inference_time / img_num);
-                printf("  GPU->CPU copy:   %.2f ms per image (avg %.2f MB)\n", total_gpu_to_cpu_time / img_num, total_output_size_mb / img_num);
-                printf("  Total transfer:  %.2f ms per image\n", (total_cpu_to_gpu_time + total_gpu_to_cpu_time) / img_num);
-                printf("  Memory transfer overhead: %.1f%% of pure inference time\n", 
-                       ((total_cpu_to_gpu_time + total_gpu_to_cpu_time) / total_pure_inference_time) * 100);
-            }
-            printf("============================================\n\n");
-
-            // === 详细开销时间分析 ===
-            printf("=== Recognition Detailed Overhead Analysis ===\n");
-            printf("Total processing time breakdown:\n");
-            if (img_num > 0) {
-                double total_overhead = total_batch_setup_overhead + total_memory_allocation_overhead + 
-                                      total_openvino_framework_overhead + total_data_transfer_overhead + 
-                                      total_shape_setting_overhead + total_system_call_overhead +
-                                      total_preprocessing_overhead + total_loop_overhead + 
-                                      total_vector_operations_overhead + total_openvino_api_overhead + 
-                                      total_ctc_decode_overhead + total_result_handling_overhead;
-                
-                double total_time = total_preprocess_time + total_summary_inference_time + total_summary_postprocess_time;
-                
-                printf("=== 基础开销 ===\n");
-                printf("1. 批处理设置开销:      %.2f ms (%.1f%% of total)\n", 
-                       total_batch_setup_overhead / img_num, 
-                       (total_batch_setup_overhead / total_time) * 100);
-                       
-                printf("2. 内存分配/释放开销:   %.2f ms (%.1f%% of total)\n", 
-                       total_memory_allocation_overhead / img_num,
-                       (total_memory_allocation_overhead / total_time) * 100);
-                       
-                printf("3. OpenVINO框架开销:    %.2f ms (%.1f%% of total)\n", 
-                       total_openvino_framework_overhead / img_num,
-                       (total_openvino_framework_overhead / total_time) * 100);
-                       
-                printf("4. 数据传输开销:        %.2f ms (%.1f%% of total)\n", 
-                       total_data_transfer_overhead / img_num,
-                       (total_data_transfer_overhead / total_time) * 100);
-                       
-                printf("5. 形状设置开销:        %.2f ms (%.1f%% of total)\n", 
-                       total_shape_setting_overhead / img_num,
-                       (total_shape_setting_overhead / total_time) * 100);
-                       
-                printf("6. 系统调用开销:        %.2f ms (%.1f%% of total)\n", 
-                       total_system_call_overhead / img_num,
-                       (total_system_call_overhead / total_time) * 100);
-                       
-                printf("=== 新增开销分析 ===\n");
-                printf("7. 预处理间隔开销:      %.2f ms (%.1f%% of total)\n", 
-                       total_preprocessing_overhead / img_num,
-                       (total_preprocessing_overhead / total_time) * 100);
-                       
-                printf("8. 批处理循环开销:      %.2f ms (%.1f%% of total)\n", 
-                       total_loop_overhead / img_num,
-                       (total_loop_overhead / total_time) * 100);
-                       
-                printf("9. 向量操作开销:        %.2f ms (%.1f%% of total)\n", 
-                       total_vector_operations_overhead / img_num,
-                       (total_vector_operations_overhead / total_time) * 100);
-                       
-                printf("10. OpenVINO API开销:   %.2f ms (%.1f%% of total)\n", 
-                       total_openvino_api_overhead / img_num,
-                       (total_openvino_api_overhead / total_time) * 100);
-                       
-                printf("11. CTC解码开销:        %.2f ms (%.1f%% of total)\n", 
-                       total_ctc_decode_overhead / img_num,
-                       (total_ctc_decode_overhead / total_time) * 100);
-                       
-                printf("12. 结果处理开销:       %.2f ms (%.1f%% of total)\n", 
-                       total_result_handling_overhead / img_num,
-                       (total_result_handling_overhead / total_time) * 100);
-                       
-                printf("-------------------------------------------\n");
-                printf("测量到的总开销:         %.2f ms (%.1f%% of total)\n", 
-                       total_overhead / img_num,
-                       (total_overhead / total_time) * 100);
-                       
-                printf("纯计算时间:             %.2f ms (%.1f%% of total)\n", 
-                       (total_resize_time + total_normalize_time + total_permute_time + total_pure_inference_time + total_postprocess_time) / img_num,
-                       ((total_resize_time + total_normalize_time + total_permute_time + total_pure_inference_time + total_postprocess_time) / total_time) * 100);
-                       
-                printf("===== 时间差值分析 =====\n");
-                double time_diff = total_time - 
-                                  (total_resize_time + total_normalize_time + total_permute_time + total_inference_time + total_postprocess_time);
-                double measured_overhead = total_overhead;
-                double unmeasured_time = time_diff - measured_overhead;
-                
-                printf("时间差值总计:           %.2f ms (%.1f ms per image)\n", 
-                       time_diff, time_diff / img_num);
-                printf("已测量开销:             %.2f ms (%.1f%% of 差值)\n", 
-                       measured_overhead, (measured_overhead / time_diff) * 100);
-                printf("未测量时间:             %.2f ms (%.1f%% of 差值)\n", 
-                       unmeasured_time, (unmeasured_time / time_diff) * 100);
-                       
-                if (unmeasured_time > 0) {
-                    printf("*** 警告: 仍有 %.1f ms (%.1f%%) 的时间无法解释! ***\n",
-                           unmeasured_time / img_num, (unmeasured_time / time_diff) * 100);
-                }
-            }
-            printf("===============================================\n\n");
-
-            // Set final timing results
-            // Detailed timings: [resize, normalize, permute, inference, postprocess]
-            times[0] = total_resize_time;      // Detailed: resize
-            times[1] = total_normalize_time;   // Detailed: normalize
-            times[2] = total_permute_time;     // Detailed: permute
-            times[3] = total_inference_time;   // Detailed: inference
-            times[4] = total_postprocess_time; // Detailed: postprocess
-
-            // Summary timings: [preprocess, inference, postprocess]
-            times[5] = total_preprocess_time;          // Summary: preprocess
-            times[6] = total_summary_inference_time;   // Summary: inference
-            times[7] = total_summary_postprocess_time; // Summary: postprocess
+            // Clear timing data as all measurement code has been removed
+            times.clear();
+            times.resize(8, 0.0);
         }
         catch (const std::exception &e)
         {
