@@ -43,6 +43,7 @@ namespace PaddleOCR
             this->det_db_unclip_ratio_ = det_db_unclip_ratio;
             this->det_db_score_mode_ = det_db_score_mode;
             this->use_dilation_ = use_dilation;
+            this->use_limit_side_len_ = (limit_type == "limit_max" || limit_type == "limit_min");
 
             this->mean_ = {0.485, 0.456, 0.406};
             this->scale_ = {1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225};
@@ -55,12 +56,12 @@ namespace PaddleOCR
         void LoadModel(const std::string &model_path) noexcept;
 
         // Run inference on image
-        void Run(const cv::Mat &img,
+        void Run(cv::Mat &img,
                  std::vector<std::vector<std::vector<int>>> &boxes,
-                 std::vector<double> &times) noexcept;
+                 std::vector<double> &times);
 
         // Print final detection memory transfer statistics
-        void PrintFinalDetectionStats() noexcept;
+        void PrintFinalDetectionStats();
 
     private:
         ov::Core core_;
@@ -75,10 +76,16 @@ namespace PaddleOCR
         double det_db_unclip_ratio_;
         std::string det_db_score_mode_;
         bool use_dilation_;
+        bool use_limit_side_len_;
 
         std::vector<float> mean_;
         std::vector<float> scale_;
         bool is_scale_;
+
+        // GPU optimization members
+        bool use_gpu_buffers_;
+        void* ocl_context_;
+        void* ocl_queue_;
 
         // pre-process
         ResizeImgType0 resize_op_;

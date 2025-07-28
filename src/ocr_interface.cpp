@@ -58,7 +58,8 @@ namespace PaddleOCR
                  std::vector<std::vector<std::vector<int>>> &boxes,
                  std::vector<double> &times) noexcept override
         {
-            detector_->Run(img, boxes, times);
+            cv::Mat img_copy = img.clone();  // Make a mutable copy
+            detector_->Run(img_copy, boxes, times);
         }
     };
 

@@ -15,7 +15,8 @@
 #include <include/ocr_rec_openvino.h>
 #include <include/utility.h>
 #include <include/args.h>
-#include <include/data_saver.h>
+
+// 移除了OpenCL头文件以避免编译错误
 
 #include <chrono>
 #include <numeric>
@@ -96,11 +97,16 @@ namespace PaddleOCR
     {
         try
         {
+            auto total_start = std::chrono::steady_clock::now();
             auto preprocess_start = std::chrono::steady_clock::now();
 
-            // Initialize timing info - provide basic timing values
-            times.clear();
-            times.resize(8, 0.0);
+            // Initialize timing variables
+            double sort_time = 0.0;
+            double resize_time = 0.0;
+            double normalize_time = 0.0;
+            double permute_time = 0.0;
+            double inference_time = 0.0;
+            double postprocess_time = 0.0;
 
             // Clear output vectors to avoid accumulation
             rec_texts.clear();
@@ -114,6 +120,7 @@ namespace PaddleOCR
             temp_rec_texts.reserve(img_num);
             temp_rec_text_scores.reserve(img_num);
 
+            auto sort_start = std::chrono::steady_clock::now();
             // Calculate aspect ratio and sort indices for optimization (same as Python version)
             std::vector<float> width_list;
             for (int i = 0; i < img_num; ++i)
@@ -121,6 +128,8 @@ namespace PaddleOCR
                 width_list.emplace_back(static_cast<float>(img_list[i].cols) / static_cast<float>(img_list[i].rows));
             }
             std::vector<size_t> indices = Utility::argsort(width_list);
+            auto sort_end = std::chrono::steady_clock::now();
+            sort_time = std::chrono::duration<double, std::milli>(sort_end - sort_start).count();
 
             // Set batch size based on device type
             int batch_num;
@@ -146,7 +155,7 @@ namespace PaddleOCR
                 norm_img_batch.reserve(batch_size);
                 int batch_width;
 
-                auto memory_alloc_end = std::chrono::steady_clock::now();
+                auto resize_start = std::chrono::steady_clock::now();
 
                 if (device_ == "NPU")
                 {
@@ -184,7 +193,11 @@ namespace PaddleOCR
                         cv::Rect roi(start_x, start_y, new_w, new_h);
                         scaled_img.copyTo(resize_img(roi));
 
+                        auto normalize_start = std::chrono::steady_clock::now();
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
+                        auto normalize_end = std::chrono::steady_clock::now();
+                        normalize_time += std::chrono::duration<double, std::milli>(normalize_end - normalize_start).count();
+                        
                         norm_img_batch.push_back(resize_img);
                     }
                 }
@@ -207,7 +220,12 @@ namespace PaddleOCR
                         cv::Mat resize_img;
                         std::vector<int> rec_image_shape = {3, this->rec_img_h_, this->rec_img_w_};
                         this->resize_op_.Run(img_list[indices[idx]], resize_img, max_wh_ratio, false, rec_image_shape);
+                        
+                        auto normalize_start = std::chrono::steady_clock::now();
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
+                        auto normalize_end = std::chrono::steady_clock::now();
+                        normalize_time += std::chrono::duration<double, std::milli>(normalize_end - normalize_start).count();
+                        
                         norm_img_batch.push_back(resize_img);
                     }
 
@@ -215,9 +233,15 @@ namespace PaddleOCR
                     batch_width = int(this->rec_img_h_ * max_wh_ratio);
                 }
 
+                auto resize_end = std::chrono::steady_clock::now();
+                resize_time += std::chrono::duration<double, std::milli>(resize_end - resize_start).count();
+
                 // Prepare input data
+                auto permute_start = std::chrono::steady_clock::now();
                 std::vector<float> input(batch_size * 3 * this->rec_img_h_ * batch_width, 0.0f);
                 this->permute_op_.Run(norm_img_batch, input.data());
+                auto permute_end = std::chrono::steady_clock::now();
+                permute_time += std::chrono::duration<double, std::milli>(permute_end - permute_start).count();
 
                 auto preprocess_end = std::chrono::steady_clock::now();
 
@@ -230,7 +254,7 @@ namespace PaddleOCR
                                         static_cast<size_t>(this->rec_img_h_),
                                         static_cast<size_t>(batch_width)});
 
-                // Copy data and run inference
+                // Standard path for inference
                 float *input_data = input_tensor.data<float>();
                 std::memcpy(input_data, input.data(), input.size() * sizeof(float));
                 infer_request_.infer();
@@ -245,6 +269,8 @@ namespace PaddleOCR
                 std::memcpy(predict_batch.data(), output_data, out_num * sizeof(float));
 
                 auto inference_end = std::chrono::steady_clock::now();
+                inference_time += std::chrono::duration<double, std::milli>(inference_end - inference_start).count();
+                
                 auto postprocess_start = std::chrono::steady_clock::now();
 
                 // Process results for current batch
@@ -307,6 +333,7 @@ namespace PaddleOCR
                 }
 
                 auto postprocess_end = std::chrono::steady_clock::now();
+                postprocess_time += std::chrono::duration<double, std::milli>(postprocess_end - postprocess_start).count();
             }
 
             // Reorder results back to original sequence (same as Python version)
@@ -318,16 +345,27 @@ namespace PaddleOCR
                 rec_text_scores[indices[i]] = temp_rec_text_scores[i];
             }
 
-            // Clear timing data as all measurement code has been removed
+            auto total_end = std::chrono::steady_clock::now();
+            double total_time = std::chrono::duration<double, std::milli>(total_end - total_start).count();
+
+            // Store detailed timings (in milliseconds)
             times.clear();
-            times.resize(8, 0.0);
+            times.resize(8);
+            times[0] = sort_time;                           // 排序时间
+            times[1] = resize_time;                         // 图像resize时间  
+            times[2] = normalize_time;                      // 图像归一化时间
+            times[3] = permute_time;                        // 维度变换时间
+            times[4] = inference_time;                      // 神经网络推理时间
+            times[5] = postprocess_time;                    // CTC解码时间
+            times[6] = total_time - inference_time;         // 除推理外的总时间
+            times[7] = total_time;                          // 总时间
         }
         catch (const std::exception &e)
         {
             std::cerr << "[ERROR] Exception in CRNNRecognizerOpenVINO::Run: " << e.what() << std::endl;
             // Ensure we have valid output even on exception
             times.clear();
-            times.resize(8, 0.0); // 5 detailed + 3 summary
+            times.resize(8, 0.0);
             // Exit to avoid further processing errors
             exit(1);
         }
@@ -336,7 +374,7 @@ namespace PaddleOCR
             std::cerr << "[ERROR] Unknown exception in CRNNRecognizerOpenVINO::Run" << std::endl;
             // Ensure we have valid output even on exception
             times.clear();
-            times.resize(8, 0.0); // 5 detailed + 3 summary
+            times.resize(8, 0.0);
             // Exit to avoid further processing errors
             exit(1);
         }

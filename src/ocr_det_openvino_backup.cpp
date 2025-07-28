@@ -15,6 +15,7 @@
 #include <include/ocr_det_openvino.h>
 #include <include/utility.h>
 #include <include/args.h>
+#include <include/data_saver.h>
 
 #include <chrono>
 #include <numeric>
@@ -105,9 +106,9 @@ namespace PaddleOCR
         }
     }
 
-    void DBDetectorOpenVINO::Run(cv::Mat &img,
+    void DBDetectorOpenVINO::Run(const cv::Mat &img,
                                  std::vector<std::vector<std::vector<int>>> &boxes,
-                                 std::vector<double> &times)
+                                 std::vector<double> &times) noexcept
     {
         try
         {
@@ -188,14 +189,6 @@ namespace PaddleOCR
             // Inference with OpenVINO - optimized for GPU with OpenCL buffers
             auto inference_start = std::chrono::steady_clock::now();
 
-            // Declare timing variables outside of conditional blocks
-            std::chrono::steady_clock::time_point shape_start, shape_end;
-            std::chrono::steady_clock::time_point cpu_to_gpu_start, cpu_to_gpu_end;
-            std::chrono::steady_clock::time_point pure_inference_start, pure_inference_end;
-            std::chrono::steady_clock::time_point gpu_to_cpu_start, gpu_to_cpu_end;
-            ov::Shape output_shape;
-            size_t out_num = 0;
-
             // GPU optimized inference with OpenCL remote tensors
             std::vector<float> out_data;
             if (use_gpu_buffers_ && device_ == "GPU") {
@@ -205,15 +198,15 @@ namespace PaddleOCR
                     auto input_tensor = infer_request_.get_input_tensor();
 
                     // Set input shape efficiently
-                    shape_start = std::chrono::steady_clock::now();
+                    auto shape_start = std::chrono::steady_clock::now();
                     ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
                     if (input_tensor.get_shape() != target_shape) {
                         input_tensor.set_shape(target_shape);
                     }
-                    shape_end = std::chrono::steady_clock::now();
+                    auto shape_end = std::chrono::steady_clock::now();
 
                     // Create OpenCL buffer for input data - zero copy optimization
-                    cpu_to_gpu_start = std::chrono::steady_clock::now();
+                    auto cpu_to_gpu_start = std::chrono::steady_clock::now();
                     
                     // Use OpenVINO's remote tensor creation for GPU buffers
                     try {
@@ -237,19 +230,19 @@ namespace PaddleOCR
                             std::copy(input.begin(), input.end(), input_data);
                         }
                     }
-                    cpu_to_gpu_end = std::chrono::steady_clock::now();
+                    auto cpu_to_gpu_end = std::chrono::steady_clock::now();
 
                     // Pure inference timing
-                    pure_inference_start = std::chrono::steady_clock::now();
+                    auto pure_inference_start = std::chrono::steady_clock::now();
                     infer_request_.infer();
-                    pure_inference_end = std::chrono::steady_clock::now();
+                    auto pure_inference_end = std::chrono::steady_clock::now();
 
                     // GPU to CPU data transfer timing with OpenCL optimization
-                    gpu_to_cpu_start = std::chrono::steady_clock::now();
+                    auto gpu_to_cpu_start = std::chrono::steady_clock::now();
                     auto output_tensor = infer_request_.get_output_tensor();
-                    output_shape = output_tensor.get_shape();
+                    auto output_shape = output_tensor.get_shape();
 
-                    out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+                    size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
                     out_data.reserve(out_num);
                     out_data.resize(out_num);
 
@@ -262,7 +255,7 @@ namespace PaddleOCR
                         float *output_data = output_tensor.data<float>();
                         std::copy(output_data, output_data + out_num, out_data.begin());
                     }
-                    gpu_to_cpu_end = std::chrono::steady_clock::now();
+                    auto gpu_to_cpu_end = std::chrono::steady_clock::now();
 
                     // Calculate detailed memory transfer timings
                     std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
@@ -304,39 +297,39 @@ namespace PaddleOCR
                 auto input_tensor = infer_request_.get_input_tensor();
 
                 // Set input shape efficiently
-                shape_start = std::chrono::steady_clock::now();
+                auto shape_start = std::chrono::steady_clock::now();
                 ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
                 if (input_tensor.get_shape() != target_shape) {
                     input_tensor.set_shape(target_shape);
                 }
-                shape_end = std::chrono::steady_clock::now();
+                auto shape_end = std::chrono::steady_clock::now();
 
                 // CPU to GPU data transfer timing
-                cpu_to_gpu_start = std::chrono::steady_clock::now();
+                auto cpu_to_gpu_start = std::chrono::steady_clock::now();
                 float *input_data = input_tensor.data<float>();
                 if (input_data && !input.empty()) {
                     std::copy(input.begin(), input.end(), input_data);
                 }
-                cpu_to_gpu_end = std::chrono::steady_clock::now();
+                auto cpu_to_gpu_end = std::chrono::steady_clock::now();
 
                 // Pure inference timing
-                pure_inference_start = std::chrono::steady_clock::now();
+                auto pure_inference_start = std::chrono::steady_clock::now();
                 infer_request_.infer();
-                pure_inference_end = std::chrono::steady_clock::now();
+                auto pure_inference_end = std::chrono::steady_clock::now();
 
                 // GPU to CPU data transfer timing
-                gpu_to_cpu_start = std::chrono::steady_clock::now();
+                auto gpu_to_cpu_start = std::chrono::steady_clock::now();
                 auto output_tensor = infer_request_.get_output_tensor();
-                output_shape = output_tensor.get_shape();
+                auto output_shape = output_tensor.get_shape();
 
-                out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+                size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
                 out_data.reserve(out_num);
                 out_data.resize(out_num);
 
                 // Direct memory copy from GPU
                 float *output_data = output_tensor.data<float>();
                 std::copy(output_data, output_data + out_num, out_data.begin());
-                gpu_to_cpu_end = std::chrono::steady_clock::now();
+                auto gpu_to_cpu_end = std::chrono::steady_clock::now();
 
                 // Calculate detailed memory transfer timings
                 std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
@@ -370,9 +363,19 @@ namespace PaddleOCR
             // Save debug data if enabled
             if (FLAGS_save_debug_data)
             {
-                // Debug data saving disabled
-                // static int det_inference_counter = 0;
-                // det_inference_counter++;
+                static int det_inference_counter = 0;
+
+                // Save input tensor data
+                std::vector<size_t> input_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+                std::vector<size_t> output_shape_vec(output_shape.begin(), output_shape.end());
+
+                DataSaver::SaveDetectionData(input, input_shape, out_data, output_shape_vec, det_inference_counter);
+
+                // // Save preprocessed image
+                // std::string prep_img_filename = "../../debug_data/cpp_preprocessed_img_" + std::to_string(det_inference_counter) + ".npy";
+                // DataSaver::SaveMatAsNpy(resize_img, prep_img_filename);
+
+                det_inference_counter++;
             }
 
             auto inference_end = std::chrono::steady_clock::now();
@@ -506,7 +509,7 @@ namespace PaddleOCR
     }
 
     // Function to print final detection memory transfer statistics
-    void DBDetectorOpenVINO::PrintFinalDetectionStats()
+    void DBDetectorOpenVINO::PrintFinalDetectionStats() noexcept
     {
         if (total_det_images > 0)
         {

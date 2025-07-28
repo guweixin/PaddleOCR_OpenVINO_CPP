@@ -75,6 +75,11 @@ namespace PaddleOCR
 
         std::vector<std::string> label_list_;
 
+        // OpenCL context for GPU buffer optimization
+        bool use_gpu_buffers_;
+        void* ocl_context_;
+        void* ocl_queue_;
+
         // pre-process
         CrnnResizeImg resize_op_;
         Normalize normalize_op_;
