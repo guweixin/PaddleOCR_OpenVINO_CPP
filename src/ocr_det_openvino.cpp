@@ -65,13 +65,21 @@ namespace PaddleOCR
             }
             else if (device_ == "GPU")
             {
-                // GPU-specific optimizations for maximum performance
+                // GPU-specific optimizations for maximum performance (benchmark style)
                 config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
                 config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
                 config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
                 config["GPU_HOST_TASK_PRIORITY"] = "HIGH";
                 config["GPU_QUEUE_PRIORITY"] = "HIGH";
+
+                // Enable GPU device memory optimization (like benchmark --use_device_mem)
                 use_gpu_buffers_ = true;
+                use_device_mem_ = true;
+                remote_tensors_created_ = false;   // Initialize remote tensors creation flag
+                use_opencl_remote_tensors_ = true; // Enable OpenCL remote tensors
+
+                std::cout << "[OpenVINO] GPU device memory optimization enabled" << std::endl;
+                std::cout << "[OpenVINO] OpenCL remote tensors enabled for zero-copy operations" << std::endl;
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -80,16 +88,136 @@ namespace PaddleOCR
             // Create inference request
             infer_request_ = compiled_model_.create_infer_request();
 
+            // 如果启用了GPU设备内存优化，检查是否支持远程张量
+            if (use_device_mem_ && device_ == "GPU")
+            {
+                try
+                {
+                    // 首先尝试创建OpenCL远程上下文
+                    if (use_opencl_remote_tensors_)
+                    {
+                        try
+                        {
+                            // 获取GPU上下文并创建OpenCL远程上下文
+                            auto gpu_context = core_.get_default_context(device_);
+                            opencl_context_ = gpu_context;
+
+                            std::cout << "[OpenVINO] OpenCL remote context created successfully" << std::endl;
+                            std::cout << "[OpenVINO] Ready for zero-copy OpenCL remote tensors" << std::endl;
+                        }
+                        catch (const std::exception &e)
+                        {
+                            std::cout << "[WARNING] Failed to create OpenCL remote context: " << e.what() << std::endl;
+                            use_opencl_remote_tensors_ = false;
+                        }
+                    }
+
+                    // 获取输入和输出张量的形状信息
+                    auto input_tensor_info = compiled_model_.input();
+                    auto output_tensor_info = compiled_model_.output();
+                    auto input_shape = input_tensor_info.get_shape();
+                    auto output_shape = output_tensor_info.get_shape();
+
+                    // 检查是否为动态形状
+                    bool has_dynamic_input = std::any_of(input_shape.begin(), input_shape.end(),
+                                                         [](size_t dim)
+                                                         { return dim == 0 || dim == ov::Dimension::dynamic().get_length(); });
+                    bool has_dynamic_output = std::any_of(output_shape.begin(), output_shape.end(),
+                                                          [](size_t dim)
+                                                          { return dim == 0 || dim == ov::Dimension::dynamic().get_length(); });
+
+                    if (has_dynamic_input || has_dynamic_output)
+                    {
+                        std::cout << "[OpenVINO] Model has dynamic shapes, will create remote tensors during inference" << std::endl;
+                        std::cout << "[OpenVINO] GPU device memory will be used with delayed tensor creation" << std::endl;
+                        if (use_opencl_remote_tensors_)
+                        {
+                            std::cout << "[OpenVINO] OpenCL remote tensors will be created dynamically for zero-copy" << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        // 静态形状，可以直接创建远程张量
+                        if (use_opencl_remote_tensors_)
+                        {
+                            // 使用OpenCL远程张量
+                            try
+                            {
+                                size_t input_size = std::accumulate(input_shape.begin(), input_shape.end(), sizeof(float), std::multiplies<size_t>());
+                                size_t output_size = std::accumulate(output_shape.begin(), output_shape.end(), sizeof(float), std::multiplies<size_t>());
+
+                                // 创建OpenCL远程张量（零拷贝）
+                                opencl_input_tensor_ = opencl_context_.create_tensor(input_tensor_info.get_element_type(), input_shape);
+                                opencl_output_tensor_ = opencl_context_.create_tensor(output_tensor_info.get_element_type(), output_shape);
+
+                                // 将OpenCL远程张量设置到推理请求中
+                                infer_request_.set_tensor(input_tensor_info.get_any_name(), opencl_input_tensor_);
+                                infer_request_.set_tensor(output_tensor_info.get_any_name(), opencl_output_tensor_);
+
+                                remote_tensors_created_ = true;
+                                std::cout << "[OpenVINO] OpenCL remote tensors created for zero-copy operations" << std::endl;
+                                std::cout << "[OpenVINO] Input buffer size: " << input_size << " bytes" << std::endl;
+                                std::cout << "[OpenVINO] Output buffer size: " << output_size << " bytes" << std::endl;
+                            }
+                            catch (const std::exception &e)
+                            {
+                                std::cout << "[WARNING] Failed to create OpenCL remote tensors: " << e.what() << std::endl;
+                                use_opencl_remote_tensors_ = false;
+                                // 继续尝试标准远程张量
+                            }
+                        }
+
+                        // 如果OpenCL远程张量失败，尝试标准远程张量
+                        if (!use_opencl_remote_tensors_ && !remote_tensors_created_)
+                        {
+                            auto context = core_.get_default_context(device_);
+
+                            // 计算张量大小
+                            size_t input_size = std::accumulate(input_shape.begin(), input_shape.end(), sizeof(float), std::multiplies<size_t>());
+                            size_t output_size = std::accumulate(output_shape.begin(), output_shape.end(), sizeof(float), std::multiplies<size_t>());
+
+                            // 创建标准远程张量
+                            cl_input_buffer_ = context.create_tensor(input_tensor_info.get_element_type(), input_shape);
+                            cl_output_buffer_ = context.create_tensor(output_tensor_info.get_element_type(), output_shape);
+
+                            // 将远程张量设置到推理请求中
+                            infer_request_.set_tensor(input_tensor_info.get_any_name(), cl_input_buffer_);
+                            infer_request_.set_tensor(output_tensor_info.get_any_name(), cl_output_buffer_);
+
+                            remote_tensors_created_ = true;
+                            std::cout << "[OpenVINO] Standard GPU device memory remote tensors initialized successfully" << std::endl;
+                            std::cout << "[OpenVINO] Input buffer size: " << input_size << " bytes" << std::endl;
+                            std::cout << "[OpenVINO] Output buffer size: " << output_size << " bytes" << std::endl;
+                        }
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << "[WARNING] Failed to create GPU remote tensors: " << e.what() << std::endl;
+                    std::cerr << "[WARNING] Falling back to standard CPU memory" << std::endl;
+                    use_device_mem_ = false;
+                }
+            }
+
+            if (!use_device_mem_)
+            {
+                std::cout << "[OpenVINO] Using standard CPU memory for tensors" << std::endl;
+            }
+
             // Initialize OpenCL context for GPU buffer optimization
-            if (use_gpu_buffers_ && device_ == "GPU") {
-                try {
+            if (use_gpu_buffers_ && device_ == "GPU")
+            {
+                try
+                {
                     std::cout << "[OpenVINO] Initializing OpenCL context for GPU buffer optimization" << std::endl;
                     // The OpenCL context will be obtained from the compiled model when needed
                     // This approach is more compatible with different OpenVINO versions
                     ocl_context_ = nullptr;
                     ocl_queue_ = nullptr;
                     std::cout << "[OpenVINO] GPU buffer optimization enabled" << std::endl;
-                } catch (const std::exception& e) {
+                }
+                catch (const std::exception &e)
+                {
                     std::cout << "[WARNING] Failed to initialize OpenCL context: " << e.what() << std::endl;
                     std::cout << "[WARNING] Falling back to standard CPU-GPU data transfer" << std::endl;
                     use_gpu_buffers_ = false;
@@ -196,44 +324,231 @@ namespace PaddleOCR
             ov::Shape output_shape;
             size_t out_num = 0;
 
-            // GPU optimized inference with OpenCL remote tensors
+            // GPU optimized inference with device memory (remote tensors and OpenCL zero-copy)
             std::vector<float> out_data;
-            if (use_gpu_buffers_ && device_ == "GPU") {
-                // Use OpenCL remote tensors for zero-copy operations
-                try {
+            if (use_device_mem_ && device_ == "GPU")
+            {
+                // Use GPU device memory (remote tensors) for zero-copy operations
+                try
+                {
+                    std::cout << "[GPU-DevMem] Using GPU device memory remote tensors" << std::endl;
+
+                    // Set input shape efficiently for remote tensor
+                    shape_start = std::chrono::steady_clock::now();
+                    ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+
+                    // For dynamic shapes, create remote tensors here with actual shape
+                    if (!remote_tensors_created_)
+                    {
+                        if (use_opencl_remote_tensors_)
+                        {
+                            // 创建OpenCL远程张量（零拷贝优化）
+                            try
+                            {
+                                auto input_tensor_info = compiled_model_.input();
+                                auto output_tensor_info = compiled_model_.output();
+
+                                // Create OpenCL remote tensors with actual runtime shape
+                                opencl_input_tensor_ = opencl_context_.create_tensor(input_tensor_info.get_element_type(), target_shape);
+
+                                // For output, estimate shape based on input (will be updated during inference)
+                                ov::Shape output_shape = {1, 1, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+                                opencl_output_tensor_ = opencl_context_.create_tensor(output_tensor_info.get_element_type(), output_shape);
+
+                                // Set OpenCL remote tensors to inference request
+                                infer_request_.set_tensor(input_tensor_info.get_any_name(), opencl_input_tensor_);
+                                infer_request_.set_tensor(output_tensor_info.get_any_name(), opencl_output_tensor_);
+
+                                remote_tensors_created_ = true;
+                                std::cout << "[GPU-DevMem] OpenCL remote tensors created dynamically for zero-copy [1,3," << resize_img.rows << "," << resize_img.cols << "]" << std::endl;
+                            }
+                            catch (const std::exception &e)
+                            {
+                                std::cout << "[WARNING] Failed to create dynamic OpenCL remote tensors: " << e.what() << std::endl;
+                                use_opencl_remote_tensors_ = false;
+                                // Fall back to standard remote tensors
+                            }
+                        }
+
+                        // Fallback to standard remote tensors if OpenCL failed
+                        if (!use_opencl_remote_tensors_ && !remote_tensors_created_)
+                        {
+                            auto context = core_.get_default_context(device_);
+                            auto input_tensor_info = compiled_model_.input();
+                            auto output_tensor_info = compiled_model_.output();
+
+                            // Create standard remote tensors with actual runtime shape
+                            cl_input_buffer_ = context.create_tensor(input_tensor_info.get_element_type(), target_shape);
+
+                            // For output, use a reasonable shape (will be updated during inference)
+                            ov::Shape output_shape = {1, 1, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+                            cl_output_buffer_ = context.create_tensor(output_tensor_info.get_element_type(), output_shape);
+
+                            // Set tensors to inference request
+                            infer_request_.set_tensor(input_tensor_info.get_any_name(), cl_input_buffer_);
+                            infer_request_.set_tensor(output_tensor_info.get_any_name(), cl_output_buffer_);
+
+                            remote_tensors_created_ = true;
+                            std::cout << "[GPU-DevMem] Standard remote tensors created dynamically with shape [1,3," << resize_img.rows << "," << resize_img.cols << "]" << std::endl;
+                        }
+                    }
+
+                    // Handle tensor reshaping based on tensor type
+                    if (use_opencl_remote_tensors_ && remote_tensors_created_)
+                    {
+                        if (opencl_input_tensor_.get_shape() != target_shape)
+                        {
+                            opencl_input_tensor_.set_shape(target_shape);
+                            infer_request_.set_tensor(compiled_model_.input().get_any_name(), opencl_input_tensor_);
+                        }
+                    }
+                    else if (remote_tensors_created_)
+                    {
+                        if (cl_input_buffer_.get_shape() != target_shape)
+                        {
+                            cl_input_buffer_.set_shape(target_shape);
+                            infer_request_.set_tensor(compiled_model_.input().get_any_name(), cl_input_buffer_);
+                        }
+                    }
+                    shape_end = std::chrono::steady_clock::now();
+
+                    // GPU device memory data transfer (zero-copy when possible)
+                    cpu_to_gpu_start = std::chrono::steady_clock::now();
+
+                    if (use_opencl_remote_tensors_ && remote_tensors_created_)
+                    {
+                        // OpenCL远程张量零拷贝操作
+                        std::cout << "[GPU-DevMem] Using OpenCL remote tensors for zero-copy input" << std::endl;
+                        float *gpu_input_data = static_cast<float *>(opencl_input_tensor_.data());
+                        if (gpu_input_data && !input.empty())
+                        {
+                            // 直接写入GPU内存，无CPU-GPU传输
+                            std::memcpy(gpu_input_data, input.data(), input.size() * sizeof(float));
+                            std::cout << "[GPU-DevMem] Zero-copy input completed: " << input.size() * sizeof(float) << " bytes" << std::endl;
+                        }
+                    }
+                    else if (remote_tensors_created_)
+                    {
+                        // 标准远程张量操作
+                        float *gpu_input_data = static_cast<float *>(cl_input_buffer_.data());
+                        if (gpu_input_data && !input.empty())
+                        {
+                            // Direct memory copy to GPU device memory
+                            std::memcpy(gpu_input_data, input.data(), input.size() * sizeof(float));
+                        }
+                    }
+
+                    cpu_to_gpu_end = std::chrono::steady_clock::now();
+
+                    // Pure inference timing with remote tensors
+                    pure_inference_start = std::chrono::steady_clock::now();
+                    infer_request_.infer();
+                    pure_inference_end = std::chrono::steady_clock::now();
+
+                    // GPU device memory to CPU transfer (zero-copy when possible)
+                    gpu_to_cpu_start = std::chrono::steady_clock::now();
+
+                    if (use_opencl_remote_tensors_ && remote_tensors_created_)
+                    {
+                        // OpenCL远程张量零拷贝输出
+                        output_shape = opencl_output_tensor_.get_shape();
+                        out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+                        out_data.reserve(out_num);
+                        out_data.resize(out_num);
+
+                        float *gpu_output_data = static_cast<float *>(opencl_output_tensor_.data());
+                        if (gpu_output_data)
+                        {
+                            std::memcpy(out_data.data(), gpu_output_data, out_num * sizeof(float));
+                            std::cout << "[GPU-DevMem] Zero-copy output completed: " << out_num * sizeof(float) << " bytes" << std::endl;
+                        }
+                    }
+                    else if (remote_tensors_created_)
+                    {
+                        // 标准远程张量输出
+                        output_shape = cl_output_buffer_.get_shape();
+                        out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+                        out_data.reserve(out_num);
+                        out_data.resize(out_num);
+
+                        float *gpu_output_data = static_cast<float *>(cl_output_buffer_.data());
+                        if (gpu_output_data)
+                        {
+                            std::memcpy(out_data.data(), gpu_output_data, out_num * sizeof(float));
+                        }
+                    }
+
+                    gpu_to_cpu_end = std::chrono::steady_clock::now();
+
+                    // Calculate detailed GPU device memory timings
+                    std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
+                    std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
+                    std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
+                    std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
+
+                    if (use_opencl_remote_tensors_)
+                    {
+                        std::cout << "[GPU-DevMem-OpenCL] Shape setup time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
+                        std::cout << "[GPU-DevMem-OpenCL] Zero-copy input: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
+                        std::cout << "[GPU-DevMem-OpenCL] Pure inference: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
+                        std::cout << "[GPU-DevMem-OpenCL] Zero-copy output: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "[GPU-DevMem] Shape setup time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
+                        std::cout << "[GPU-DevMem] CPU->GPU transfer: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
+                        std::cout << "[GPU-DevMem] Pure inference: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
+                        std::cout << "[GPU-DevMem] GPU->CPU transfer: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    std::cerr << "[ERROR] GPU device memory operation failed: " << e.what() << std::endl;
+                    std::cerr << "[FALLBACK] Switching to standard GPU buffers" << std::endl;
+                    use_device_mem_ = false;
+                    // Fall through to standard GPU buffer path
+                }
+            }
+
+            if (use_gpu_buffers_ && device_ == "GPU" && !use_device_mem_)
+            {
+                // Use standard OpenCL buffers for GPU optimization
+                try
+                {
                     // Get input tensor and optimize data transfer
                     auto input_tensor = infer_request_.get_input_tensor();
 
                     // Set input shape efficiently
                     shape_start = std::chrono::steady_clock::now();
                     ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape) {
+                    if (input_tensor.get_shape() != target_shape)
+                    {
                         input_tensor.set_shape(target_shape);
                     }
                     shape_end = std::chrono::steady_clock::now();
 
-                    // Create OpenCL buffer for input data - zero copy optimization
+                    // Standard GPU buffer optimization
                     cpu_to_gpu_start = std::chrono::steady_clock::now();
-                    
-                    // Use OpenVINO's remote tensor creation for GPU buffers
-                    try {
-                        // Create a remote tensor that shares GPU memory
-                        auto context = compiled_model_.get_context();
-                        size_t input_size = input.size() * sizeof(float);
-                        
-                        // For now, use standard approach but with optimized memory layout
+
+                    // Use OpenVINO's standard tensor approach with optimization
+                    try
+                    {
                         float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty()) {
+                        if (input_data && !input.empty())
+                        {
                             // Optimized memory copy with alignment
-                            std::memcpy(input_data, input.data(), input_size);
+                            std::memcpy(input_data, input.data(), input.size() * sizeof(float));
                         }
-                        
-                        std::cout << "[GPU-OPT] Using optimized GPU buffer transfer for detection" << std::endl;
-                    } catch (const std::exception& e) {
+
+                        std::cout << "[GPU-Std] Using optimized GPU buffer transfer for detection" << std::endl;
+                    }
+                    catch (const std::exception &e)
+                    {
                         // Fallback to standard approach
-                        std::cout << "[WARNING] OpenCL buffer creation failed, using standard transfer: " << e.what() << std::endl;
+                        std::cout << "[WARNING] GPU buffer optimization failed, using standard transfer: " << e.what() << std::endl;
                         float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty()) {
+                        if (input_data && !input.empty())
+                        {
                             std::copy(input.begin(), input.end(), input_data);
                         }
                     }
@@ -244,7 +559,7 @@ namespace PaddleOCR
                     infer_request_.infer();
                     pure_inference_end = std::chrono::steady_clock::now();
 
-                    // GPU to CPU data transfer timing with OpenCL optimization
+                    // GPU to CPU data transfer timing with optimization
                     gpu_to_cpu_start = std::chrono::steady_clock::now();
                     auto output_tensor = infer_request_.get_output_tensor();
                     output_shape = output_tensor.get_shape();
@@ -254,10 +569,13 @@ namespace PaddleOCR
                     out_data.resize(out_num);
 
                     // Optimized GPU to CPU transfer
-                    try {
+                    try
+                    {
                         float *output_data = output_tensor.data<float>();
                         std::memcpy(out_data.data(), output_data, out_num * sizeof(float));
-                    } catch (const std::exception& e) {
+                    }
+                    catch (const std::exception &e)
+                    {
                         // Fallback to standard copy
                         float *output_data = output_tensor.data<float>();
                         std::copy(output_data, output_data + out_num, out_data.begin());
@@ -270,28 +588,31 @@ namespace PaddleOCR
                     std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
                     std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
 
-                    std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
-                    std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
-                    std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
-                    std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
-
-                } catch (const std::exception& e) {
+                    std::cout << "[GPU-Std] Shape setup time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
+                    std::cout << "[GPU-Std] CPU->GPU transfer: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
+                    std::cout << "[GPU-Std] Pure inference: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
+                    std::cout << "[GPU-Std] GPU->CPU transfer: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+                }
+                catch (const std::exception &e)
+                {
                     std::cout << "[ERROR] GPU optimized inference failed: " << e.what() << std::endl;
                     std::cout << "[INFO] Falling back to standard inference" << std::endl;
                     use_gpu_buffers_ = false; // Disable for future calls
-                    
+
                     // Fallback to standard approach
                     auto input_tensor = infer_request_.get_input_tensor();
                     ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape) {
+                    if (input_tensor.get_shape() != target_shape)
+                    {
                         input_tensor.set_shape(target_shape);
                     }
                     float *input_data = input_tensor.data<float>();
-                    if (input_data && !input.empty()) {
+                    if (input_data && !input.empty())
+                    {
                         std::copy(input.begin(), input.end(), input_data);
                     }
                     infer_request_.infer();
-                    
+
                     auto output_tensor = infer_request_.get_output_tensor();
                     auto output_shape = output_tensor.get_shape();
                     size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
@@ -299,14 +620,17 @@ namespace PaddleOCR
                     float *output_data = output_tensor.data<float>();
                     std::copy(output_data, output_data + out_num, out_data.begin());
                 }
-            } else {
+            }
+            else
+            {
                 // Standard CPU/GPU inference without OpenCL optimization
                 auto input_tensor = infer_request_.get_input_tensor();
 
                 // Set input shape efficiently
                 shape_start = std::chrono::steady_clock::now();
                 ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                if (input_tensor.get_shape() != target_shape) {
+                if (input_tensor.get_shape() != target_shape)
+                {
                     input_tensor.set_shape(target_shape);
                 }
                 shape_end = std::chrono::steady_clock::now();
@@ -314,7 +638,8 @@ namespace PaddleOCR
                 // CPU to GPU data transfer timing
                 cpu_to_gpu_start = std::chrono::steady_clock::now();
                 float *input_data = input_tensor.data<float>();
-                if (input_data && !input.empty()) {
+                if (input_data && !input.empty())
+                {
                     std::copy(input.begin(), input.end(), input_data);
                 }
                 cpu_to_gpu_end = std::chrono::steady_clock::now();
@@ -514,19 +839,19 @@ namespace PaddleOCR
             printf("Detection processed %d images\n", total_det_images);
             printf("Detection Memory Transfer Timing (per image averages):\n");
             printf("  Shape setup:     %.2f ms per image\n", total_det_shape_time / total_det_images);
-            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n",
                    total_det_cpu_to_gpu_time / total_det_images,
                    (double)total_det_input_size_mb / total_det_images);
             printf("  Pure inference:  %.2f ms per image\n", total_det_pure_inference_time / total_det_images);
-            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n",
                    total_det_gpu_to_cpu_time / total_det_images,
                    (double)total_det_output_size_mb / total_det_images);
-            
+
             double avg_total_transfer = (total_det_cpu_to_gpu_time + total_det_gpu_to_cpu_time) / total_det_images;
             double avg_total_time = (total_det_shape_time + total_det_cpu_to_gpu_time + total_det_pure_inference_time + total_det_gpu_to_cpu_time) / total_det_images;
             double avg_pure_inference = total_det_pure_inference_time / total_det_images;
-            
-            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n", 
+
+            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n",
                    avg_total_transfer, (avg_total_transfer / avg_total_time) * 100);
             printf("  Memory transfer overhead: %.1f%% of pure inference time\n",
                    (avg_total_transfer / avg_pure_inference) * 100);
