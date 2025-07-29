@@ -82,11 +82,6 @@ namespace PaddleOCR
         std::vector<float> scale_;
         bool is_scale_;
 
-        // GPU optimization members
-        bool use_gpu_buffers_;
-        void* ocl_context_;
-        void* ocl_queue_;
-
         // pre-process
         ResizeImgType0 resize_op_;
         Normalize normalize_op_;

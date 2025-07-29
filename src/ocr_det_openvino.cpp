@@ -14,7 +14,7 @@
 
 #include <include/ocr_det_openvino.h>
 #include <include/utility.h>
-#include <include/args.h>
+// #include <include/args.h>  // Removed Paddle dependency
 
 #include <chrono>
 #include <numeric>
@@ -57,21 +57,17 @@ namespace PaddleOCR
 
             // Configure device-specific settings
             ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
+            // ✅ 启用OpenVINO GPU缓存 (生成clDNN OpenCL内核缓存和模型编译缓存)
+            config["CACHE_DIR"] = "./openvino_cache";
             if (device_ == "CPU")
             {
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
-                use_gpu_buffers_ = false;
             }
             else if (device_ == "GPU")
             {
-                // GPU-specific optimizations for maximum performance
-                config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
-                config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
-                config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
-                config["GPU_HOST_TASK_PRIORITY"] = "HIGH";
-                config["GPU_QUEUE_PRIORITY"] = "HIGH";
-                use_gpu_buffers_ = true;
+
+                std::cout << "[OpenVINO] Intel GPU clDNN cache enabled for detection (.cl_cache + .blob files)" << std::endl;
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -79,22 +75,6 @@ namespace PaddleOCR
 
             // Create inference request
             infer_request_ = compiled_model_.create_infer_request();
-
-            // Initialize OpenCL context for GPU buffer optimization
-            if (use_gpu_buffers_ && device_ == "GPU") {
-                try {
-                    std::cout << "[OpenVINO] Initializing OpenCL context for GPU buffer optimization" << std::endl;
-                    // The OpenCL context will be obtained from the compiled model when needed
-                    // This approach is more compatible with different OpenVINO versions
-                    ocl_context_ = nullptr;
-                    ocl_queue_ = nullptr;
-                    std::cout << "[OpenVINO] GPU buffer optimization enabled" << std::endl;
-                } catch (const std::exception& e) {
-                    std::cout << "[WARNING] Failed to initialize OpenCL context: " << e.what() << std::endl;
-                    std::cout << "[WARNING] Falling back to standard CPU-GPU data transfer" << std::endl;
-                    use_gpu_buffers_ = false;
-                }
-            }
 
             std::cout << "[OpenVINO] Model loaded successfully for device: " << device_ << std::endl;
         }
@@ -185,170 +165,61 @@ namespace PaddleOCR
 
             auto preprocess_end = std::chrono::steady_clock::now();
 
-            // Inference with OpenVINO - optimized for GPU with OpenCL buffers
+            // Inference with OpenVINO - standard approach
             auto inference_start = std::chrono::steady_clock::now();
 
-            // Declare timing variables outside of conditional blocks
-            std::chrono::steady_clock::time_point shape_start, shape_end;
-            std::chrono::steady_clock::time_point cpu_to_gpu_start, cpu_to_gpu_end;
-            std::chrono::steady_clock::time_point pure_inference_start, pure_inference_end;
-            std::chrono::steady_clock::time_point gpu_to_cpu_start, gpu_to_cpu_end;
-            ov::Shape output_shape;
-            size_t out_num = 0;
+            // Standard GPU/CPU inference
+            auto input_tensor = infer_request_.get_input_tensor();
 
-            // GPU optimized inference with OpenCL remote tensors
-            std::vector<float> out_data;
-            if (use_gpu_buffers_ && device_ == "GPU") {
-                // Use OpenCL remote tensors for zero-copy operations
-                try {
-                    // Get input tensor and optimize data transfer
-                    auto input_tensor = infer_request_.get_input_tensor();
-
-                    // Set input shape efficiently
-                    shape_start = std::chrono::steady_clock::now();
-                    ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape) {
-                        input_tensor.set_shape(target_shape);
-                    }
-                    shape_end = std::chrono::steady_clock::now();
-
-                    // Create OpenCL buffer for input data - zero copy optimization
-                    cpu_to_gpu_start = std::chrono::steady_clock::now();
-                    
-                    // Use OpenVINO's remote tensor creation for GPU buffers
-                    try {
-                        // Create a remote tensor that shares GPU memory
-                        auto context = compiled_model_.get_context();
-                        size_t input_size = input.size() * sizeof(float);
-                        
-                        // For now, use standard approach but with optimized memory layout
-                        float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty()) {
-                            // Optimized memory copy with alignment
-                            std::memcpy(input_data, input.data(), input_size);
-                        }
-                        
-                        std::cout << "[GPU-OPT] Using optimized GPU buffer transfer for detection" << std::endl;
-                    } catch (const std::exception& e) {
-                        // Fallback to standard approach
-                        std::cout << "[WARNING] OpenCL buffer creation failed, using standard transfer: " << e.what() << std::endl;
-                        float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty()) {
-                            std::copy(input.begin(), input.end(), input_data);
-                        }
-                    }
-                    cpu_to_gpu_end = std::chrono::steady_clock::now();
-
-                    // Pure inference timing
-                    pure_inference_start = std::chrono::steady_clock::now();
-                    infer_request_.infer();
-                    pure_inference_end = std::chrono::steady_clock::now();
-
-                    // GPU to CPU data transfer timing with OpenCL optimization
-                    gpu_to_cpu_start = std::chrono::steady_clock::now();
-                    auto output_tensor = infer_request_.get_output_tensor();
-                    output_shape = output_tensor.get_shape();
-
-                    out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                    out_data.reserve(out_num);
-                    out_data.resize(out_num);
-
-                    // Optimized GPU to CPU transfer
-                    try {
-                        float *output_data = output_tensor.data<float>();
-                        std::memcpy(out_data.data(), output_data, out_num * sizeof(float));
-                    } catch (const std::exception& e) {
-                        // Fallback to standard copy
-                        float *output_data = output_tensor.data<float>();
-                        std::copy(output_data, output_data + out_num, out_data.begin());
-                    }
-                    gpu_to_cpu_end = std::chrono::steady_clock::now();
-
-                    // Calculate detailed memory transfer timings
-                    std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
-                    std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
-                    std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
-                    std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
-
-                    std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
-                    std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
-                    std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
-                    std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
-
-                } catch (const std::exception& e) {
-                    std::cout << "[ERROR] GPU optimized inference failed: " << e.what() << std::endl;
-                    std::cout << "[INFO] Falling back to standard inference" << std::endl;
-                    use_gpu_buffers_ = false; // Disable for future calls
-                    
-                    // Fallback to standard approach
-                    auto input_tensor = infer_request_.get_input_tensor();
-                    ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape) {
-                        input_tensor.set_shape(target_shape);
-                    }
-                    float *input_data = input_tensor.data<float>();
-                    if (input_data && !input.empty()) {
-                        std::copy(input.begin(), input.end(), input_data);
-                    }
-                    infer_request_.infer();
-                    
-                    auto output_tensor = infer_request_.get_output_tensor();
-                    auto output_shape = output_tensor.get_shape();
-                    size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                    out_data.resize(out_num);
-                    float *output_data = output_tensor.data<float>();
-                    std::copy(output_data, output_data + out_num, out_data.begin());
-                }
-            } else {
-                // Standard CPU/GPU inference without OpenCL optimization
-                auto input_tensor = infer_request_.get_input_tensor();
-
-                // Set input shape efficiently
-                shape_start = std::chrono::steady_clock::now();
-                ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                if (input_tensor.get_shape() != target_shape) {
-                    input_tensor.set_shape(target_shape);
-                }
-                shape_end = std::chrono::steady_clock::now();
-
-                // CPU to GPU data transfer timing
-                cpu_to_gpu_start = std::chrono::steady_clock::now();
-                float *input_data = input_tensor.data<float>();
-                if (input_data && !input.empty()) {
-                    std::copy(input.begin(), input.end(), input_data);
-                }
-                cpu_to_gpu_end = std::chrono::steady_clock::now();
-
-                // Pure inference timing
-                pure_inference_start = std::chrono::steady_clock::now();
-                infer_request_.infer();
-                pure_inference_end = std::chrono::steady_clock::now();
-
-                // GPU to CPU data transfer timing
-                gpu_to_cpu_start = std::chrono::steady_clock::now();
-                auto output_tensor = infer_request_.get_output_tensor();
-                output_shape = output_tensor.get_shape();
-
-                out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                out_data.reserve(out_num);
-                out_data.resize(out_num);
-
-                // Direct memory copy from GPU
-                float *output_data = output_tensor.data<float>();
-                std::copy(output_data, output_data + out_num, out_data.begin());
-                gpu_to_cpu_end = std::chrono::steady_clock::now();
-
-                // Calculate detailed memory transfer timings
-                std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
-                std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
-                std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
-                std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
-
-                std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
-                std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
-                std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
-                std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+            // Set input shape efficiently
+            auto shape_start = std::chrono::steady_clock::now();
+            ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+            if (input_tensor.get_shape() != target_shape)
+            {
+                input_tensor.set_shape(target_shape);
             }
+            auto shape_end = std::chrono::steady_clock::now();
+
+            // CPU to GPU data transfer timing
+            auto cpu_to_gpu_start = std::chrono::steady_clock::now();
+            float *input_data = input_tensor.data<float>();
+            if (input_data && !input.empty())
+            {
+                std::copy(input.begin(), input.end(), input_data);
+            }
+            auto cpu_to_gpu_end = std::chrono::steady_clock::now();
+
+            // Pure inference timing
+            auto pure_inference_start = std::chrono::steady_clock::now();
+            infer_request_.infer();
+            auto pure_inference_end = std::chrono::steady_clock::now();
+
+            // GPU to CPU data transfer timing
+            auto gpu_to_cpu_start = std::chrono::steady_clock::now();
+            auto output_tensor = infer_request_.get_output_tensor();
+            auto output_shape = output_tensor.get_shape();
+
+            size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+            std::vector<float> out_data;
+            out_data.reserve(out_num);
+            out_data.resize(out_num);
+
+            // Direct memory copy from GPU
+            float *output_data = output_tensor.data<float>();
+            std::copy(output_data, output_data + out_num, out_data.begin());
+            auto gpu_to_cpu_end = std::chrono::steady_clock::now();
+
+            // Calculate detailed memory transfer timings
+            std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
+            std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
+            std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
+            std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
+
+            std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
+            std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
+            std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
+            std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+
             shape_time = std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
             cpu_to_gpu_time = std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
             pure_inference_time = std::chrono::duration<double, std::milli>(pure_inference_end - pure_inference_start).count();
@@ -367,13 +238,13 @@ namespace PaddleOCR
             total_det_output_size_mb += output_size_mb;
             total_det_images++;
 
-            // Save debug data if enabled
-            if (FLAGS_save_debug_data)
-            {
-                // Debug data saving disabled
-                // static int det_inference_counter = 0;
-                // det_inference_counter++;
-            }
+            // Save debug data disabled (removed FLAGS dependency)
+            // if (FLAGS_save_debug_data)
+            // {
+            //     // Debug data saving disabled
+            //     // static int det_inference_counter = 0;
+            //     // det_inference_counter++;
+            // }
 
             auto inference_end = std::chrono::steady_clock::now();
 
@@ -514,19 +385,19 @@ namespace PaddleOCR
             printf("Detection processed %d images\n", total_det_images);
             printf("Detection Memory Transfer Timing (per image averages):\n");
             printf("  Shape setup:     %.2f ms per image\n", total_det_shape_time / total_det_images);
-            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n",
                    total_det_cpu_to_gpu_time / total_det_images,
                    (double)total_det_input_size_mb / total_det_images);
             printf("  Pure inference:  %.2f ms per image\n", total_det_pure_inference_time / total_det_images);
-            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n",
                    total_det_gpu_to_cpu_time / total_det_images,
                    (double)total_det_output_size_mb / total_det_images);
-            
+
             double avg_total_transfer = (total_det_cpu_to_gpu_time + total_det_gpu_to_cpu_time) / total_det_images;
             double avg_total_time = (total_det_shape_time + total_det_cpu_to_gpu_time + total_det_pure_inference_time + total_det_gpu_to_cpu_time) / total_det_images;
             double avg_pure_inference = total_det_pure_inference_time / total_det_images;
-            
-            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n", 
+
+            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n",
                    avg_total_transfer, (avg_total_transfer / avg_total_time) * 100);
             printf("  Memory transfer overhead: %.1f%% of pure inference time\n",
                    (avg_total_transfer / avg_pure_inference) * 100);

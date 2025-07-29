@@ -1,13 +1,20 @@
 #include "include/ocr_interface.h"
+
+#ifdef WITH_PADDLE
 #include "include/ocr_det.h"
 #include "include/ocr_rec.h"
+#endif
+
+#ifdef WITH_OPENVINO
 #include "include/ocr_det_openvino.h"
 #include "include/ocr_rec_openvino.h"
+#endif
 
 namespace PaddleOCR
 {
 
-    // Adapter for Paddle Detector
+#ifdef WITH_PADDLE
+    // Adapter for Paddle Detector (only compiled when WITH_PADDLE=ON)
     class PaddleDetectorAdapter : public DetectorInterface
     {
     private:
@@ -25,7 +32,7 @@ namespace PaddleOCR
         }
     };
 
-    // Adapter for Paddle Recognizer
+    // Adapter for Paddle Recognizer (only compiled when WITH_PADDLE=ON)
     class PaddleRecognizerAdapter : public RecognizerInterface
     {
     private:
@@ -43,8 +50,10 @@ namespace PaddleOCR
             recognizer_->Run(img_list, rec_texts, rec_text_scores, times);
         }
     };
+#endif // WITH_PADDLE
 
-    // Adapter for OpenVINO Detector
+#ifdef WITH_OPENVINO
+    // Adapter for OpenVINO Detector (only compiled when WITH_OPENVINO=ON)
     class OpenVINODetectorAdapter : public DetectorInterface
     {
     private:
@@ -81,6 +90,7 @@ namespace PaddleOCR
             recognizer_->Run(img_list, rec_texts, rec_text_scores, times);
         }
     };
+#endif // WITH_OPENVINO
 
     // Factory implementations
     std::unique_ptr<DetectorInterface> DetectorFactory::CreateDetector(
@@ -103,6 +113,7 @@ namespace PaddleOCR
         const std::string &device)
     {
 
+#ifdef WITH_PADDLE
         if (framework == "paddle")
         {
             auto detector = std::make_unique<DBDetector>(
@@ -111,21 +122,20 @@ namespace PaddleOCR
                 det_db_unclip_ratio, det_db_score_mode, use_dilation, use_tensorrt, precision);
             return std::make_unique<PaddleDetectorAdapter>(std::move(detector));
         }
-        else if (framework == "ov")
-        {
+        else
+#endif
 #ifdef WITH_OPENVINO
+        if (framework == "ov")
+        {
             auto detector = std::make_unique<DBDetectorOpenVINO>(
                 model_dir, device, limit_type, limit_side_len, det_db_thresh, det_db_box_thresh,
                 det_db_unclip_ratio, det_db_score_mode, use_dilation);
             return std::make_unique<OpenVINODetectorAdapter>(std::move(detector));
-#else
-            std::cerr << "[ERROR] OpenVINO support not enabled. Please build with -DWITH_OPENVINO=ON" << std::endl;
-            return nullptr;
-#endif
         }
         else
+#endif
         {
-            std::cerr << "[ERROR] Unsupported framework: " << framework << std::endl;
+            std::cerr << "[ERROR] Unsupported framework: " << framework << " or framework not enabled" << std::endl;
             return nullptr;
         }
     }
@@ -147,6 +157,7 @@ namespace PaddleOCR
         const std::string &device)
     {
 
+#ifdef WITH_PADDLE
         if (framework == "paddle")
         {
             auto recognizer = std::make_unique<CRNNRecognizer>(
@@ -154,20 +165,19 @@ namespace PaddleOCR
                 use_mkldnn, label_path, use_tensorrt, precision, rec_batch_num, rec_img_h, rec_img_w);
             return std::make_unique<PaddleRecognizerAdapter>(std::move(recognizer));
         }
-        else if (framework == "ov")
-        {
+        else
+#endif
 #ifdef WITH_OPENVINO
+        if (framework == "ov")
+        {
             auto recognizer = std::make_unique<CRNNRecognizerOpenVINO>(
                 model_dir, device, label_path, rec_batch_num, rec_img_h, rec_img_w);
             return std::make_unique<OpenVINORecognizerAdapter>(std::move(recognizer));
-#else
-            std::cerr << "[ERROR] OpenVINO support not enabled. Please build with -DWITH_OPENVINO=ON" << std::endl;
-            return nullptr;
-#endif
         }
         else
+#endif
         {
-            std::cerr << "[ERROR] Unsupported framework: " << framework << std::endl;
+            std::cerr << "[ERROR] Unsupported framework: " << framework << " or framework not enabled" << std::endl;
             return nullptr;
         }
     }

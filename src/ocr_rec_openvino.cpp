@@ -14,9 +14,7 @@
 
 #include <include/ocr_rec_openvino.h>
 #include <include/utility.h>
-#include <include/args.h>
-
-// 移除了OpenCL头文件以避免编译错误
+// #include <include/args.h>  // Removed Paddle dependency
 
 #include <chrono>
 #include <numeric>
@@ -50,6 +48,8 @@ namespace PaddleOCR
 
             // Configure device-specific settings
             ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
+            // ✅ 启用OpenVINO GPU缓存 (生成clDNN OpenCL内核缓存和模型编译缓存)
+            config["CACHE_DIR"] = "./openvino_cache";
             if (device_ == "CPU")
             {
                 // CPU-specific configurations
@@ -57,10 +57,10 @@ namespace PaddleOCR
             }
             else if (device_ == "GPU")
             {
-                // GPU-specific optimizations
-                config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
-                config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
-                config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
+                // ✅ 启用OpenVINO GPU缓存 (生成clDNN OpenCL内核缓存和模型编译缓存)
+                config["CACHE_DIR"] = "./openvino_cache";
+
+                std::cout << "[OpenVINO] Intel GPU clDNN cache enabled for recognition (.cl_cache + .blob files)" << std::endl;
             }
             // Compile the model for the specified device
             compiled_model_ = core_.compile_model(model, device_, config);
@@ -197,7 +197,7 @@ namespace PaddleOCR
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
                         auto normalize_end = std::chrono::steady_clock::now();
                         normalize_time += std::chrono::duration<double, std::milli>(normalize_end - normalize_start).count();
-                        
+
                         norm_img_batch.push_back(resize_img);
                     }
                 }
@@ -220,12 +220,12 @@ namespace PaddleOCR
                         cv::Mat resize_img;
                         std::vector<int> rec_image_shape = {3, this->rec_img_h_, this->rec_img_w_};
                         this->resize_op_.Run(img_list[indices[idx]], resize_img, max_wh_ratio, false, rec_image_shape);
-                        
+
                         auto normalize_start = std::chrono::steady_clock::now();
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
                         auto normalize_end = std::chrono::steady_clock::now();
                         normalize_time += std::chrono::duration<double, std::milli>(normalize_end - normalize_start).count();
-                        
+
                         norm_img_batch.push_back(resize_img);
                     }
 
@@ -270,7 +270,7 @@ namespace PaddleOCR
 
                 auto inference_end = std::chrono::steady_clock::now();
                 inference_time += std::chrono::duration<double, std::milli>(inference_end - inference_start).count();
-                
+
                 auto postprocess_start = std::chrono::steady_clock::now();
 
                 // Process results for current batch
@@ -351,14 +351,14 @@ namespace PaddleOCR
             // Store detailed timings (in milliseconds)
             times.clear();
             times.resize(8);
-            times[0] = sort_time;                           // 排序时间
-            times[1] = resize_time;                         // 图像resize时间  
-            times[2] = normalize_time;                      // 图像归一化时间
-            times[3] = permute_time;                        // 维度变换时间
-            times[4] = inference_time;                      // 神经网络推理时间
-            times[5] = postprocess_time;                    // CTC解码时间
-            times[6] = total_time - inference_time;         // 除推理外的总时间
-            times[7] = total_time;                          // 总时间
+            times[0] = sort_time;                   // 排序时间
+            times[1] = resize_time;                 // 图像resize时间
+            times[2] = normalize_time;              // 图像归一化时间
+            times[3] = permute_time;                // 维度变换时间
+            times[4] = inference_time;              // 神经网络推理时间
+            times[5] = postprocess_time;            // CTC解码时间
+            times[6] = total_time - inference_time; // 除推理外的总时间
+            times[7] = total_time;                  // 总时间
         }
         catch (const std::exception &e)
         {

@@ -12,16 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <opencv2/imgcodecs.hpp>
-
-#include <include/args.h>
-#include <include/paddleocr.h>
-
 #include <iostream>
 #include <vector>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
+
+// Conditional includes based on build configuration
+#ifdef WITH_PADDLE
+#include <include/args.h>
+#include <include/paddleocr.h>
+#endif
+
+#ifdef WITH_OPENVINO
+#include "include/ocr_det_openvino.h"
+#include "include/ocr_rec_openvino.h"
+#include <openvino/openvino.hpp>
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -102,6 +124,7 @@ void showProgress(size_t current, size_t total)
 
 using namespace PaddleOCR;
 
+#ifdef WITH_PADDLE
 void check_params()
 {
   if (FLAGS_det)
@@ -216,7 +239,9 @@ void check_params()
   }
   std::cout << "===============================" << std::endl;
 }
+#endif // WITH_PADDLE
 
+#ifdef WITH_PADDLE
 std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
 {
   auto start_time_imread = std::chrono::high_resolution_clock::now();
@@ -352,14 +377,61 @@ void run_batch_processing_mode()
   std::cout << "Results saved to: " << FLAGS_output << std::endl;
   std::cout << "=================================================================" << std::endl;
 }
+#endif // WITH_PADDLE
 
 int main(int argc, char **argv)
 {
-  // Parsing command-line
+#ifdef WITH_PADDLE
+  // Original Paddle-based main function
   google::ParseCommandLineFlags(&argc, &argv, true);
   check_params();
-
-  // Use batch processing mode as default
   run_batch_processing_mode();
+#elif defined(WITH_OPENVINO)
+  // OpenVINO-only mode
+  std::cout << "=== OpenVINO OCR Test Program ===" << std::endl;
+  
+  try {
+    // Initialize OpenVINO Core
+    ov::Core core;
+    auto devices = core.get_available_devices();
+    
+    std::cout << "Available OpenVINO devices:" << std::endl;
+    for (const auto& device : devices) {
+      std::cout << "  - " << device << std::endl;
+    }
+    
+    // Check for GPU device
+    bool gpu_found = false;
+    for (const auto& device : devices) {
+      if (device.find("GPU") != std::string::npos) {
+        gpu_found = true;
+        std::cout << "GPU device found: " << device << std::endl;
+        
+        try {
+          auto device_name = core.get_property(device, ov::device::full_name);
+          std::cout << "GPU Full Name: " << device_name << std::endl;
+        } catch (const std::exception& e) {
+          std::cout << "Could not get GPU properties: " << e.what() << std::endl;
+        }
+        break;
+      }
+    }
+    
+    if (!gpu_found) {
+      std::cout << "No GPU device found, will use CPU" << std::endl;
+    }
+    
+    std::cout << "OpenVINO OCR libraries compiled successfully!" << std::endl;
+    std::cout << "To use OCR functionality, integrate with your application." << std::endl;
+    
+  } catch (const std::exception& e) {
+    std::cerr << "OpenVINO initialization error: " << e.what() << std::endl;
+    return -1;
+  }
+#else
+  std::cout << "No framework enabled. Please build with either -DWITH_PADDLE=ON or -DWITH_OPENVINO=ON" << std::endl;
+  return -1;
+#endif
+  
   return 0;
 }
