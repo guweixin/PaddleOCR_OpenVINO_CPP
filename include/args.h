@@ -53,8 +53,6 @@ DECLARE_bool(rec);
 // evaluation related
 // Language parameter removed - batch processing mode is now default
 DECLARE_string(image_dir);
-// debug data saving
-DECLARE_bool(save_debug_data);
 
 // Auto-detected GPU usage flag (external variable)
 extern bool auto_use_gpu;

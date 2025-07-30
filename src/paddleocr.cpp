@@ -17,7 +17,6 @@
 #include <include/ocr_rec.h>
 #include <include/paddleocr.h>
 #include <include/ocr_interface.h>
-#include <include/data_saver.h>
 #include <include/ocr_det_openvino.h>
 
 #include <auto_log/autolog.h>

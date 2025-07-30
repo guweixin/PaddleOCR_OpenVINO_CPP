@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(ppocr CXX C)
 
-option(WITH_MKL        "Compile demo with MKL/OpenBlas support, default use MKL."       ON)
+option(WITH_MKL        "Compile demo with MKL/OpenBlas support, default use MKL."       OFF)
 option(WITH_GPU        "Compile demo with GPU/CPU, default use CPU."                    OFF)
-option(WITH_STATIC_LIB "Compile demo with static/shared library, default use static."   ON)
+option(WITH_STATIC_LIB "Compile demo with static/shared library, default use static."   OFF)
 option(WITH_TENSORRT "Compile demo with TensorRT."   OFF)
 option(WITH_OPENVINO "Compile demo with OpenVINO support."   ON)
 
@@ -245,7 +245,6 @@ if (WITH_OPENVINO)
 endif()
 
 list(APPEND SRCS "./src/ocr_interface.cpp")
-list(APPEND SRCS "./src/data_saver.cpp")
 
 add_executable(${DEMO_NAME} ${SRCS})
 target_link_libraries(${DEMO_NAME} ${DEPS})

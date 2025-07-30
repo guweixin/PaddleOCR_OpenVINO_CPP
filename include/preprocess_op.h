@@ -57,28 +57,6 @@ namespace PaddleOCR
                                                                 320}) noexcept;
   };
 
-  class ClsResizeImg
-  {
-  public:
-    virtual void
-    Run(const cv::Mat &img, cv::Mat &resize_img, bool use_tensorrt = false,
-        const std::vector<int> &rec_image_shape = {3, 48, 192}) noexcept;
-  };
-
-  class TableResizeImg
-  {
-  public:
-    virtual void Run(const cv::Mat &img, cv::Mat &resize_img,
-                     const int max_len = 488) noexcept;
-  };
-
-  class TablePadImg
-  {
-  public:
-    virtual void Run(const cv::Mat &img, cv::Mat &resize_img,
-                     const int max_len = 488) noexcept;
-  };
-
   class Resize
   {
   public:

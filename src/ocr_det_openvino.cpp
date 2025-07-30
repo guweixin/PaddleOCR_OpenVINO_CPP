@@ -61,18 +61,10 @@ namespace PaddleOCR
             {
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
-                use_gpu_buffers_ = false;
             }
             else if (device_ == "GPU")
             {
-
-                // // GPU-specific optimizations for maximum performance
-                // config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
-                // config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
-                // config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
-                // config["GPU_HOST_TASK_PRIORITY"] = "HIGH";
-                // config["GPU_QUEUE_PRIORITY"] = "HIGH";
-                // use_gpu_buffers_ = true;
+                // GPU device - using default configurations
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -80,142 +72,6 @@ namespace PaddleOCR
 
             // Create inference request
             infer_request_ = compiled_model_.create_infer_request();
-
-            // 如果启用了GPU设备内存优化，检查是否支持远程张量
-            if (use_device_mem_ && device_ == "GPU")
-            {
-                try
-                {
-                    // 首先尝试创建OpenCL远程上下文
-                    if (use_opencl_remote_tensors_)
-                    {
-                        try
-                        {
-                            // 获取GPU上下文并创建OpenCL远程上下文
-                            auto gpu_context = core_.get_default_context(device_);
-                            opencl_context_ = gpu_context;
-
-                            std::cout << "[OpenVINO] OpenCL remote context created successfully" << std::endl;
-                            std::cout << "[OpenVINO] Ready for zero-copy OpenCL remote tensors" << std::endl;
-                        }
-                        catch (const std::exception &e)
-                        {
-                            std::cout << "[WARNING] Failed to create OpenCL remote context: " << e.what() << std::endl;
-                            use_opencl_remote_tensors_ = false;
-                        }
-                    }
-
-                    // 获取输入和输出张量的形状信息
-                    auto input_tensor_info = compiled_model_.input();
-                    auto output_tensor_info = compiled_model_.output();
-                    auto input_shape = input_tensor_info.get_shape();
-                    auto output_shape = output_tensor_info.get_shape();
-
-                    // 检查是否为动态形状
-                    bool has_dynamic_input = std::any_of(input_shape.begin(), input_shape.end(),
-                                                         [](size_t dim)
-                                                         { return dim == 0 || dim == ov::Dimension::dynamic().get_length(); });
-                    bool has_dynamic_output = std::any_of(output_shape.begin(), output_shape.end(),
-                                                          [](size_t dim)
-                                                          { return dim == 0 || dim == ov::Dimension::dynamic().get_length(); });
-
-                    if (has_dynamic_input || has_dynamic_output)
-                    {
-                        std::cout << "[OpenVINO] Model has dynamic shapes, will create remote tensors during inference" << std::endl;
-                        std::cout << "[OpenVINO] GPU device memory will be used with delayed tensor creation" << std::endl;
-                        if (use_opencl_remote_tensors_)
-                        {
-                            std::cout << "[OpenVINO] OpenCL remote tensors will be created dynamically for zero-copy" << std::endl;
-                        }
-                    }
-                    else
-                    {
-                        // 静态形状，可以直接创建远程张量
-                        if (use_opencl_remote_tensors_)
-                        {
-                            // 使用OpenCL远程张量
-                            try
-                            {
-                                size_t input_size = std::accumulate(input_shape.begin(), input_shape.end(), sizeof(float), std::multiplies<size_t>());
-                                size_t output_size = std::accumulate(output_shape.begin(), output_shape.end(), sizeof(float), std::multiplies<size_t>());
-
-                                // 创建OpenCL远程张量（零拷贝）
-                                opencl_input_tensor_ = opencl_context_.create_tensor(input_tensor_info.get_element_type(), input_shape);
-                                opencl_output_tensor_ = opencl_context_.create_tensor(output_tensor_info.get_element_type(), output_shape);
-
-                                // 将OpenCL远程张量设置到推理请求中
-                                infer_request_.set_tensor(input_tensor_info.get_any_name(), opencl_input_tensor_);
-                                infer_request_.set_tensor(output_tensor_info.get_any_name(), opencl_output_tensor_);
-
-                                remote_tensors_created_ = true;
-                                std::cout << "[OpenVINO] OpenCL remote tensors created for zero-copy operations" << std::endl;
-                                std::cout << "[OpenVINO] Input buffer size: " << input_size << " bytes" << std::endl;
-                                std::cout << "[OpenVINO] Output buffer size: " << output_size << " bytes" << std::endl;
-                            }
-                            catch (const std::exception &e)
-                            {
-                                std::cout << "[WARNING] Failed to create OpenCL remote tensors: " << e.what() << std::endl;
-                                use_opencl_remote_tensors_ = false;
-                                // 继续尝试标准远程张量
-                            }
-                        }
-
-                        // 如果OpenCL远程张量失败，尝试标准远程张量
-                        if (!use_opencl_remote_tensors_ && !remote_tensors_created_)
-                        {
-                            auto context = core_.get_default_context(device_);
-
-                            // 计算张量大小
-                            size_t input_size = std::accumulate(input_shape.begin(), input_shape.end(), sizeof(float), std::multiplies<size_t>());
-                            size_t output_size = std::accumulate(output_shape.begin(), output_shape.end(), sizeof(float), std::multiplies<size_t>());
-
-                            // 创建标准远程张量
-                            cl_input_buffer_ = context.create_tensor(input_tensor_info.get_element_type(), input_shape);
-                            cl_output_buffer_ = context.create_tensor(output_tensor_info.get_element_type(), output_shape);
-
-                            // 将远程张量设置到推理请求中
-                            infer_request_.set_tensor(input_tensor_info.get_any_name(), cl_input_buffer_);
-                            infer_request_.set_tensor(output_tensor_info.get_any_name(), cl_output_buffer_);
-
-                            remote_tensors_created_ = true;
-                            std::cout << "[OpenVINO] Standard GPU device memory remote tensors initialized successfully" << std::endl;
-                            std::cout << "[OpenVINO] Input buffer size: " << input_size << " bytes" << std::endl;
-                            std::cout << "[OpenVINO] Output buffer size: " << output_size << " bytes" << std::endl;
-                        }
-                    }
-                }
-                catch (const std::exception &e)
-                {
-                    std::cerr << "[WARNING] Failed to create GPU remote tensors: " << e.what() << std::endl;
-                    std::cerr << "[WARNING] Falling back to standard CPU memory" << std::endl;
-                    use_device_mem_ = false;
-                }
-            }
-
-            if (!use_device_mem_)
-            {
-                std::cout << "[OpenVINO] Using standard CPU memory for tensors" << std::endl;
-            }
-
-            // Initialize OpenCL context for GPU buffer optimization
-            if (use_gpu_buffers_ && device_ == "GPU")
-            {
-                try
-                {
-                    std::cout << "[OpenVINO] Initializing OpenCL context for GPU buffer optimization" << std::endl;
-                    // The OpenCL context will be obtained from the compiled model when needed
-                    // This approach is more compatible with different OpenVINO versions
-                    ocl_context_ = nullptr;
-                    ocl_queue_ = nullptr;
-                    std::cout << "[OpenVINO] GPU buffer optimization enabled" << std::endl;
-                }
-                catch (const std::exception &e)
-                {
-                    std::cout << "[WARNING] Failed to initialize OpenCL context: " << e.what() << std::endl;
-                    std::cout << "[WARNING] Falling back to standard CPU-GPU data transfer" << std::endl;
-                    use_gpu_buffers_ = false;
-                }
-            }
 
             std::cout << "[OpenVINO] Model loaded successfully for device: " << device_ << std::endl;
         }
@@ -306,7 +162,7 @@ namespace PaddleOCR
 
             auto preprocess_end = std::chrono::steady_clock::now();
 
-            // Inference with OpenVINO - optimized for GPU with OpenCL buffers
+            // Inference with OpenVINO - standard approach
             auto inference_start = std::chrono::steady_clock::now();
 
             // Declare timing variables outside of conditional blocks
@@ -317,179 +173,57 @@ namespace PaddleOCR
             ov::Shape output_shape;
             size_t out_num = 0;
 
-            // GPU optimized inference with device memory (remote tensors and OpenCL zero-copy)
             std::vector<float> out_data;
 
-            if (use_gpu_buffers_ && device_ == "GPU")
+            auto input_tensor = infer_request_.get_input_tensor();
+
+            // Set input shape efficiently
+            shape_start = std::chrono::steady_clock::now();
+            ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
+            if (input_tensor.get_shape() != target_shape)
             {
-                // Use OpenCL remote tensors for zero-copy operations
-
-                try
-                {
-                    // Get input tensor and optimize data transfer
-                    auto input_tensor = infer_request_.get_input_tensor();
-
-                    // Set input shape efficiently
-                    shape_start = std::chrono::steady_clock::now();
-                    ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape)
-                    {
-                        input_tensor.set_shape(target_shape);
-                    }
-                    shape_end = std::chrono::steady_clock::now();
-
-                    // Standard GPU buffer optimization
-                    cpu_to_gpu_start = std::chrono::steady_clock::now();
-
-                    // Use OpenVINO's remote tensor creation for GPU buffers
-                    try
-                    {
-                        // Create a remote tensor that shares GPU memory
-                        auto context = compiled_model_.get_context();
-                        size_t input_size = input.size() * sizeof(float);
-
-                        // For now, use standard approach but with optimized memory layout
-                        float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty())
-                        {
-                            // Optimized memory copy with alignment
-                            std::memcpy(input_data, input.data(), input.size() * sizeof(float));
-                        }
-
-                        std::cout << "[GPU-OPT] Using optimized GPU buffer transfer for detection" << std::endl;
-                    }
-                    catch (const std::exception &e)
-                    {
-                        // Fallback to standard approach
-                        std::cout << "[WARNING] GPU buffer optimization failed, using standard transfer: " << e.what() << std::endl;
-                        float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty())
-                        {
-                            std::copy(input.begin(), input.end(), input_data);
-                        }
-                    }
-                    cpu_to_gpu_end = std::chrono::steady_clock::now();
-
-                    // Pure inference timing
-                    pure_inference_start = std::chrono::steady_clock::now();
-                    infer_request_.infer();
-                    pure_inference_end = std::chrono::steady_clock::now();
-
-                    // GPU to CPU data transfer timing with optimization
-                    gpu_to_cpu_start = std::chrono::steady_clock::now();
-                    auto output_tensor = infer_request_.get_output_tensor();
-                    output_shape = output_tensor.get_shape();
-
-                    out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                    out_data.reserve(out_num);
-                    out_data.resize(out_num);
-
-                    // Optimized GPU to CPU transfer
-                    try
-                    {
-                        float *output_data = output_tensor.data<float>();
-                        std::memcpy(out_data.data(), output_data, out_num * sizeof(float));
-                    }
-                    catch (const std::exception &e)
-                    {
-                        // Fallback to standard copy
-                        float *output_data = output_tensor.data<float>();
-                        std::copy(output_data, output_data + out_num, out_data.begin());
-                    }
-                    gpu_to_cpu_end = std::chrono::steady_clock::now();
-
-                    // Calculate detailed memory transfer timings
-                    std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
-                    std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
-                    std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
-                    std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
-
-                    std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
-                    std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
-                    std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
-                    std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
-                }
-                catch (const std::exception &e)
-                {
-                    std::cout << "[ERROR] GPU optimized inference failed: " << e.what() << std::endl;
-                    std::cout << "[INFO] Falling back to standard inference" << std::endl;
-                    use_gpu_buffers_ = false; // Disable for future calls
-
-                    // Fallback to standard approach
-                    auto input_tensor = infer_request_.get_input_tensor();
-                    ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape)
-                    {
-                        input_tensor.set_shape(target_shape);
-                    }
-                    float *input_data = input_tensor.data<float>();
-                    if (input_data && !input.empty())
-                    {
-                        std::copy(input.begin(), input.end(), input_data);
-                    }
-                    infer_request_.infer();
-
-                    auto output_tensor = infer_request_.get_output_tensor();
-                    auto output_shape = output_tensor.get_shape();
-                    size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                    out_data.resize(out_num);
-                    float *output_data = output_tensor.data<float>();
-                    std::copy(output_data, output_data + out_num, out_data.begin());
-                }
+                input_tensor.set_shape(target_shape);
             }
-            else
+            shape_end = std::chrono::steady_clock::now();
+
+            // CPU to GPU data transfer timing
+            cpu_to_gpu_start = std::chrono::steady_clock::now();
+            float *input_data = input_tensor.data<float>();
+            if (input_data && !input.empty())
             {
-                // Standard CPU/GPU inference without OpenCL optimization
-                auto input_tensor = infer_request_.get_input_tensor();
-
-                // Set input shape efficiently
-                shape_start = std::chrono::steady_clock::now();
-                ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                if (input_tensor.get_shape() != target_shape)
-                {
-                    input_tensor.set_shape(target_shape);
-                }
-                shape_end = std::chrono::steady_clock::now();
-
-                // CPU to GPU data transfer timing
-                cpu_to_gpu_start = std::chrono::steady_clock::now();
-                float *input_data = input_tensor.data<float>();
-                if (input_data && !input.empty())
-                {
-                    std::copy(input.begin(), input.end(), input_data);
-                }
-                cpu_to_gpu_end = std::chrono::steady_clock::now();
-
-                // Pure inference timing
-                pure_inference_start = std::chrono::steady_clock::now();
-                infer_request_.infer();
-                pure_inference_end = std::chrono::steady_clock::now();
-
-                // GPU to CPU data transfer timing
-                gpu_to_cpu_start = std::chrono::steady_clock::now();
-                auto output_tensor = infer_request_.get_output_tensor();
-                output_shape = output_tensor.get_shape();
-
-                out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
-                out_data.reserve(out_num);
-                out_data.resize(out_num);
-
-                // Direct memory copy from GPU
-                float *output_data = output_tensor.data<float>();
-                std::copy(output_data, output_data + out_num, out_data.begin());
-                gpu_to_cpu_end = std::chrono::steady_clock::now();
-
-                // Calculate detailed memory transfer timings
-                std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
-                std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
-                std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
-                std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
-
-                std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
-                std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
-                std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
-                std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+                std::copy(input.begin(), input.end(), input_data);
             }
+            cpu_to_gpu_end = std::chrono::steady_clock::now();
+
+            // Pure inference timing
+            pure_inference_start = std::chrono::steady_clock::now();
+            infer_request_.infer();
+            pure_inference_end = std::chrono::steady_clock::now();
+
+            // GPU to CPU data transfer timing
+            gpu_to_cpu_start = std::chrono::steady_clock::now();
+            auto output_tensor = infer_request_.get_output_tensor();
+            output_shape = output_tensor.get_shape();
+
+            out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
+            out_data.reserve(out_num);
+            out_data.resize(out_num);
+
+            // Direct memory copy from GPU
+            float *output_data = output_tensor.data<float>();
+            std::copy(output_data, output_data + out_num, out_data.begin());
+            gpu_to_cpu_end = std::chrono::steady_clock::now();
+
+            // Calculate detailed memory transfer timings
+            std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
+            std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
+            std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
+            std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
+
+            std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
+            std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
+            std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
+            std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
             shape_time = std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
             cpu_to_gpu_time = std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
             pure_inference_time = std::chrono::duration<double, std::milli>(pure_inference_end - pure_inference_start).count();
@@ -508,14 +242,6 @@ namespace PaddleOCR
             total_det_output_size_mb += output_size_mb;
             total_det_images++;
 
-            // Save debug data if enabled
-            if (FLAGS_save_debug_data)
-            {
-                // Debug data saving disabled
-                // static int det_inference_counter = 0;
-                // det_inference_counter++;
-            }
-
             auto inference_end = std::chrono::steady_clock::now();
 
             // Postprocessing
@@ -524,11 +250,6 @@ namespace PaddleOCR
             int n2 = static_cast<int>(output_shape[2]);
             int n3 = static_cast<int>(output_shape[3]);
             int n = n2 * n3;
-
-            // std::cout << "[DEBUG] Original image size: " << img.cols << "x" << img.rows << std::endl;
-            // std::cout << "[DEBUG] Resized image size: " << resize_img.cols << "x" << resize_img.rows << std::endl;
-            // std::cout << "[DEBUG] Model output size: " << n3 << "x" << n2 << std::endl;
-            // std::cout << "[DEBUG] srcimg size passed to BoxesFromBitmap: " << srcimg.cols << "x" << srcimg.rows << std::endl;
 
             std::vector<float> pred(n, 0.0);
             std::vector<unsigned char> cbuf(n, ' ');
@@ -562,37 +283,9 @@ namespace PaddleOCR
                 pred_map, bit_map, srcimg.cols, srcimg.rows));
             auto boxes_from_bitmap_end = std::chrono::steady_clock::now();
 
-            // // Print boxes for debugging
-            // // std::cout << "[DEBUG] BoxesFromBitmap returned " << boxes.size() << " boxes:" << std::endl;
-            // for (size_t i = 0; i < boxes.size(); ++i)
-            // {
-            //     std::cout << "  Box " << i << ": ";
-            //     for (size_t j = 0; j < boxes[i].size(); ++j)
-            //     {
-            //         if (j > 0)
-            //             std::cout << " -> ";
-            //         std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
-            //     }
-            //     std::cout << std::endl;
-            // }
-
             auto filter_tag_start = std::chrono::steady_clock::now();
             post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, srcimg);
             auto filter_tag_end = std::chrono::steady_clock::now();
-
-            // // Print boxes after FilterTagDetRes for debugging
-            //  std::cout << "[DEBUG] After FilterTagDetRes, final boxes:" << std::endl;
-            // for (size_t i = 0; i < boxes.size(); ++i)
-            // {
-            //     std::cout << "  Final Box " << i << ": ";
-            //     for (size_t j = 0; j < boxes[i].size(); ++j)
-            //     {
-            //         if (j > 0)
-            //             std::cout << " -> ";
-            //         std::cout << "(" << boxes[i][j][0] << "," << boxes[i][j][1] << ")";
-            //     }
-            //     std::cout << std::endl;
-            // }
 
             auto postprocess_end = std::chrono::steady_clock::now();
 

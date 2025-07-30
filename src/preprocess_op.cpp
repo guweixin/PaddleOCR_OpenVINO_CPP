@@ -141,50 +141,6 @@ namespace PaddleOCR
                        {255, 255, 255});
   }
 
-  void ClsResizeImg::Run(const cv::Mat &img, cv::Mat &resize_img,
-                         bool use_tensorrt,
-                         const std::vector<int> &rec_image_shape) noexcept
-  {
-    int imgC, imgH, imgW;
-    imgC = rec_image_shape[0];
-    imgH = rec_image_shape[1];
-    imgW = rec_image_shape[2];
-
-    float ratio = float(img.cols) / float(img.rows);
-    int resize_w, resize_h;
-    if (ceilf(imgH * ratio) > imgW)
-      resize_w = imgW;
-    else
-      resize_w = int(ceilf(imgH * ratio));
-
-    cv::resize(img, resize_img, cv::Size(resize_w, imgH), 0.f, 0.f,
-               cv::INTER_LINEAR);
-  }
-
-  void TableResizeImg::Run(const cv::Mat &img, cv::Mat &resize_img,
-                           const int max_len) noexcept
-  {
-    int w = img.cols;
-    int h = img.rows;
-
-    int max_wh = w >= h ? w : h;
-    float ratio = w >= h ? float(max_len) / float(w) : float(max_len) / float(h);
-
-    int resize_h = int(float(h) * ratio);
-    int resize_w = int(float(w) * ratio);
-
-    cv::resize(img, resize_img, cv::Size(resize_w, resize_h));
-  }
-
-  void TablePadImg::Run(const cv::Mat &img, cv::Mat &resize_img,
-                        const int max_len) noexcept
-  {
-    int w = img.cols;
-    int h = img.rows;
-    cv::copyMakeBorder(img, resize_img, 0, max_len - h, 0, max_len - w,
-                       cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0));
-  }
-
   void Resize::Run(const cv::Mat &img, cv::Mat &resize_img, const int h,
                    const int w) noexcept
   {

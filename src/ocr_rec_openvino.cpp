@@ -57,10 +57,7 @@ namespace PaddleOCR
             }
             else if (device_ == "GPU")
             {
-                // // GPU-specific optimizations
-                // config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
-                // config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
-                // config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
+                // GPU device - using default configurations
             }
             // Compile the model for the specified device
             compiled_model_ = core_.compile_model(model, device_, config);

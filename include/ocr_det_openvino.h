@@ -44,7 +44,6 @@ namespace PaddleOCR
             this->det_db_score_mode_ = det_db_score_mode;
             this->use_dilation_ = use_dilation;
             this->use_limit_side_len_ = (limit_type == "limit_max" || limit_type == "limit_min");
-            this->use_device_mem_ = false; // Will be enabled based on runtime detection
 
             this->mean_ = {0.485, 0.456, 0.406};
             this->scale_ = {1.0 / 0.229, 1.0 / 0.224, 1.0 / 0.225};
@@ -82,21 +81,6 @@ namespace PaddleOCR
         std::vector<float> mean_;
         std::vector<float> scale_;
         bool is_scale_;
-
-        // GPU optimization members
-        bool use_gpu_buffers_;
-        bool use_device_mem_;            // Device memory flag (like benchmark --use_device_mem)
-        bool remote_tensors_created_;    // Flag to track if remote tensors are created
-        bool use_opencl_remote_tensors_; // Flag for OpenCL remote tensors
-        void *ocl_context_;
-        void *ocl_queue_;
-        ov::Tensor cl_input_buffer_;  // GPU device memory input tensor (remote tensor)
-        ov::Tensor cl_output_buffer_; // GPU device memory output tensor (remote tensor)
-
-        // OpenCL remote tensor context
-        ov::RemoteContext opencl_context_;
-        ov::Tensor opencl_input_tensor_;
-        ov::Tensor opencl_output_tensor_;
 
         // pre-process
         ResizeImgType0 resize_op_;
