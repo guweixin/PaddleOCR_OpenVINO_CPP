@@ -147,12 +147,33 @@ void check_params()
     if (FLAGS_inference_framework == "ov")
     {
       std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
-      std::ifstream file(rec_model_path);
-      if (!file.good())
+
+      if (FLAGS_inference_device == "NPU")
       {
-        std::cout << "Error: Recognition model file '" << rec_model_path
-                  << "' not found" << std::endl;
-        exit(1);
+        // For NPU, check if the directory exists and contains required model files
+        std::string model_small_path = rec_model_path + "/inference_320_bs1.xml";
+        std::string model_big_path = rec_model_path + "/inference_640_bs1.xml";
+
+        std::ifstream file_small(model_small_path);
+        std::ifstream file_big(model_big_path);
+
+        if (!file_small.good() || !file_big.good())
+        {
+          std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
+          std::cout << "Required files: inference_320_bs1.xml, inference_640_bs1.xml" << std::endl;
+          exit(1);
+        }
+      }
+      else
+      {
+        // For CPU/GPU, check single model file
+        std::ifstream file(rec_model_path);
+        if (!file.good())
+        {
+          std::cout << "Error: Recognition model file '" << rec_model_path
+                    << "' not found" << std::endl;
+          exit(1);
+        }
       }
     }
   }

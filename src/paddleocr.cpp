@@ -44,7 +44,8 @@ namespace PaddleOCR
         }
         else if (model_type == "rec")
         {
-          filename = "inference_480_bs1.xml";
+          // For NPU recognition, return directory path to allow dual-model loading
+          return model_dir;
         }
         else
         {

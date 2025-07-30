@@ -43,12 +43,12 @@ namespace PaddleOCR
             // this->scale_ = {1.0 / 0.5, 1.0 / 0.5, 1.0 / 0.5};
             this->is_scale_ = true;
 
-            LoadModel(model_dir);
+            LoadModels(model_dir);
             LoadLabelList(label_path);
         }
 
-        // Load OpenVINO model
-        void LoadModel(const std::string &model_path) noexcept;
+        // Load OpenVINO models
+        void LoadModels(const std::string &model_dir) noexcept;
 
         // Load label list
         void LoadLabelList(const std::string &label_path) noexcept;
@@ -60,9 +60,22 @@ namespace PaddleOCR
                  std::vector<double> &times) noexcept;
 
     private:
+        // NPU-specific processing with dual-model selection
+        void runNPUProcessing(const std::vector<cv::Mat> &img_list,
+                              std::vector<std::string> &rec_texts,
+                              std::vector<float> &rec_text_scores,
+                              std::vector<double> &times) noexcept;
+
+        // CPU/GPU-specific processing with original logic
+        void runCPUGPUProcessing(const std::vector<cv::Mat> &img_list,
+                                 std::vector<std::string> &rec_texts,
+                                 std::vector<float> &rec_text_scores,
+                                 std::vector<double> &times) noexcept;
         ov::Core core_;
-        ov::CompiledModel compiled_model_;
-        ov::InferRequest infer_request_;
+        ov::CompiledModel compiled_model_small_;
+        ov::CompiledModel compiled_model_big_;
+        ov::InferRequest infer_request_small_;
+        ov::InferRequest infer_request_big_;
 
         std::string device_;
         int rec_batch_num_;
