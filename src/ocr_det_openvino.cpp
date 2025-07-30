@@ -65,13 +65,13 @@ namespace PaddleOCR
             }
             else if (device_ == "GPU")
             {
-                // GPU-specific optimizations for maximum performance
-                config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
-                config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
-                config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
-                config["GPU_HOST_TASK_PRIORITY"] = "HIGH";
-                config["GPU_QUEUE_PRIORITY"] = "HIGH";
-                use_gpu_buffers_ = true;
+                // // GPU-specific optimizations for maximum performance
+                // config["GPU_ENABLE_LOOP_UNROLLING"] = "YES";
+                // config["GPU_DISABLE_WINOGRAD_CONVOLUTION"] = "NO";
+                // config["INFERENCE_PRECISION_HINT"] = "f16"; // Use FP16 for better GPU performance
+                // config["GPU_HOST_TASK_PRIORITY"] = "HIGH";
+                // config["GPU_QUEUE_PRIORITY"] = "HIGH";
+                // use_gpu_buffers_ = true;
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -81,15 +81,19 @@ namespace PaddleOCR
             infer_request_ = compiled_model_.create_infer_request();
 
             // Initialize OpenCL context for GPU buffer optimization
-            if (use_gpu_buffers_ && device_ == "GPU") {
-                try {
+            if (use_gpu_buffers_ && device_ == "GPU")
+            {
+                try
+                {
                     std::cout << "[OpenVINO] Initializing OpenCL context for GPU buffer optimization" << std::endl;
                     // The OpenCL context will be obtained from the compiled model when needed
                     // This approach is more compatible with different OpenVINO versions
                     ocl_context_ = nullptr;
                     ocl_queue_ = nullptr;
                     std::cout << "[OpenVINO] GPU buffer optimization enabled" << std::endl;
-                } catch (const std::exception& e) {
+                }
+                catch (const std::exception &e)
+                {
                     std::cout << "[WARNING] Failed to initialize OpenCL context: " << e.what() << std::endl;
                     std::cout << "[WARNING] Falling back to standard CPU-GPU data transfer" << std::endl;
                     use_gpu_buffers_ = false;
@@ -198,42 +202,50 @@ namespace PaddleOCR
 
             // GPU optimized inference with OpenCL remote tensors
             std::vector<float> out_data;
-            if (use_gpu_buffers_ && device_ == "GPU") {
+            if (use_gpu_buffers_ && device_ == "GPU")
+            {
                 // Use OpenCL remote tensors for zero-copy operations
-                try {
+                try
+                {
                     // Get input tensor and optimize data transfer
                     auto input_tensor = infer_request_.get_input_tensor();
 
                     // Set input shape efficiently
                     shape_start = std::chrono::steady_clock::now();
                     ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape) {
+                    if (input_tensor.get_shape() != target_shape)
+                    {
                         input_tensor.set_shape(target_shape);
                     }
                     shape_end = std::chrono::steady_clock::now();
 
                     // Create OpenCL buffer for input data - zero copy optimization
                     cpu_to_gpu_start = std::chrono::steady_clock::now();
-                    
+
                     // Use OpenVINO's remote tensor creation for GPU buffers
-                    try {
+                    try
+                    {
                         // Create a remote tensor that shares GPU memory
                         auto context = compiled_model_.get_context();
                         size_t input_size = input.size() * sizeof(float);
-                        
+
                         // For now, use standard approach but with optimized memory layout
                         float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty()) {
+                        if (input_data && !input.empty())
+                        {
                             // Optimized memory copy with alignment
                             std::memcpy(input_data, input.data(), input_size);
                         }
-                        
+
                         std::cout << "[GPU-OPT] Using optimized GPU buffer transfer for detection" << std::endl;
-                    } catch (const std::exception& e) {
+                    }
+                    catch (const std::exception &e)
+                    {
                         // Fallback to standard approach
                         std::cout << "[WARNING] OpenCL buffer creation failed, using standard transfer: " << e.what() << std::endl;
                         float *input_data = input_tensor.data<float>();
-                        if (input_data && !input.empty()) {
+                        if (input_data && !input.empty())
+                        {
                             std::copy(input.begin(), input.end(), input_data);
                         }
                     }
@@ -254,10 +266,13 @@ namespace PaddleOCR
                     out_data.resize(out_num);
 
                     // Optimized GPU to CPU transfer
-                    try {
+                    try
+                    {
                         float *output_data = output_tensor.data<float>();
                         std::memcpy(out_data.data(), output_data, out_num * sizeof(float));
-                    } catch (const std::exception& e) {
+                    }
+                    catch (const std::exception &e)
+                    {
                         // Fallback to standard copy
                         float *output_data = output_tensor.data<float>();
                         std::copy(output_data, output_data + out_num, out_data.begin());
@@ -274,24 +289,27 @@ namespace PaddleOCR
                     std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
                     std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
                     std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
-
-                } catch (const std::exception& e) {
+                }
+                catch (const std::exception &e)
+                {
                     std::cout << "[ERROR] GPU optimized inference failed: " << e.what() << std::endl;
                     std::cout << "[INFO] Falling back to standard inference" << std::endl;
                     use_gpu_buffers_ = false; // Disable for future calls
-                    
+
                     // Fallback to standard approach
                     auto input_tensor = infer_request_.get_input_tensor();
                     ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                    if (input_tensor.get_shape() != target_shape) {
+                    if (input_tensor.get_shape() != target_shape)
+                    {
                         input_tensor.set_shape(target_shape);
                     }
                     float *input_data = input_tensor.data<float>();
-                    if (input_data && !input.empty()) {
+                    if (input_data && !input.empty())
+                    {
                         std::copy(input.begin(), input.end(), input_data);
                     }
                     infer_request_.infer();
-                    
+
                     auto output_tensor = infer_request_.get_output_tensor();
                     auto output_shape = output_tensor.get_shape();
                     size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
@@ -299,14 +317,17 @@ namespace PaddleOCR
                     float *output_data = output_tensor.data<float>();
                     std::copy(output_data, output_data + out_num, out_data.begin());
                 }
-            } else {
+            }
+            else
+            {
                 // Standard CPU/GPU inference without OpenCL optimization
                 auto input_tensor = infer_request_.get_input_tensor();
 
                 // Set input shape efficiently
                 shape_start = std::chrono::steady_clock::now();
                 ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
-                if (input_tensor.get_shape() != target_shape) {
+                if (input_tensor.get_shape() != target_shape)
+                {
                     input_tensor.set_shape(target_shape);
                 }
                 shape_end = std::chrono::steady_clock::now();
@@ -314,7 +335,8 @@ namespace PaddleOCR
                 // CPU to GPU data transfer timing
                 cpu_to_gpu_start = std::chrono::steady_clock::now();
                 float *input_data = input_tensor.data<float>();
-                if (input_data && !input.empty()) {
+                if (input_data && !input.empty())
+                {
                     std::copy(input.begin(), input.end(), input_data);
                 }
                 cpu_to_gpu_end = std::chrono::steady_clock::now();
@@ -514,19 +536,19 @@ namespace PaddleOCR
             printf("Detection processed %d images\n", total_det_images);
             printf("Detection Memory Transfer Timing (per image averages):\n");
             printf("  Shape setup:     %.2f ms per image\n", total_det_shape_time / total_det_images);
-            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n",
                    total_det_cpu_to_gpu_time / total_det_images,
                    (double)total_det_input_size_mb / total_det_images);
             printf("  Pure inference:  %.2f ms per image\n", total_det_pure_inference_time / total_det_images);
-            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n", 
+            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n",
                    total_det_gpu_to_cpu_time / total_det_images,
                    (double)total_det_output_size_mb / total_det_images);
-            
+
             double avg_total_transfer = (total_det_cpu_to_gpu_time + total_det_gpu_to_cpu_time) / total_det_images;
             double avg_total_time = (total_det_shape_time + total_det_cpu_to_gpu_time + total_det_pure_inference_time + total_det_gpu_to_cpu_time) / total_det_images;
             double avg_pure_inference = total_det_pure_inference_time / total_det_images;
-            
-            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n", 
+
+            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n",
                    avg_total_transfer, (avg_total_transfer / avg_total_time) * 100);
             printf("  Memory transfer overhead: %.1f%% of pure inference time\n",
                    (avg_total_transfer / avg_pure_inference) * 100);
