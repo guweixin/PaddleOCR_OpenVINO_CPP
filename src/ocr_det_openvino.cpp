@@ -15,7 +15,6 @@
 #include <include/ocr_det_openvino.h>
 #include <include/utility.h>
 #include <include/args.h>
-
 #include <chrono>
 #include <numeric>
 #include <cstring>
@@ -64,7 +63,7 @@ namespace PaddleOCR
             }
             else if (device_ == "GPU")
             {
-                // GPU device - using default configurations
+                config["INFERENCE_PRECISION_HINT"] = "f16";
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;

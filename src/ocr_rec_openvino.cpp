@@ -15,9 +15,6 @@
 #include <include/ocr_rec_openvino.h>
 #include <include/utility.h>
 #include <include/args.h>
-
-// 移除了OpenCL头文件以避免编译错误
-
 #include <chrono>
 #include <numeric>
 #include <cstring>
@@ -57,7 +54,7 @@ namespace PaddleOCR
             }
             else if (device_ == "GPU")
             {
-                // GPU device - using default configurations
+                config["INFERENCE_PRECISION_HINT"] = "f16";
             }
             // Compile the model for the specified device
             compiled_model_ = core_.compile_model(model, device_, config);
@@ -200,8 +197,7 @@ namespace PaddleOCR
                 }
                 else
                 {
-                    // Standard preprocessing for CPU/GPU (dynamic width calculation)
-                    // Calculate max_wh_ratio for current batch (Python version logic)
+                    // Standard preprocessing for CPU/GPU (dynamic width calculation) Calculate max_wh_ratio for current batch (Python version logic)
                     float max_wh_ratio = static_cast<float>(this->rec_img_w_) / static_cast<float>(this->rec_img_h_);
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
                     {
@@ -245,7 +241,7 @@ namespace PaddleOCR
                 // Inference with OpenVINO
                 auto inference_start = std::chrono::steady_clock::now();
 
-                // Get input tensor and set shape
+                // Get input tensor
                 auto input_tensor = infer_request_.get_input_tensor();
                 input_tensor.set_shape({static_cast<size_t>(batch_size), 3,
                                         static_cast<size_t>(this->rec_img_h_),
@@ -256,7 +252,7 @@ namespace PaddleOCR
                 std::memcpy(input_data, input.data(), input.size() * sizeof(float));
                 infer_request_.infer();
 
-                // Get output
+                // Get output tensor
                 auto output_tensor = infer_request_.get_output_tensor();
                 auto output_shape = output_tensor.get_shape();
                 size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
