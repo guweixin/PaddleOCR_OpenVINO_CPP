@@ -109,33 +109,15 @@ namespace PaddleOCR
             // Preprocessing - device-specific optimizations
             if (device_ == "NPU")
             {
-                // NPU specific preprocessing: resize to 960x960 with aspect ratio preserved and white padding
+                // NPU specific preprocessing: direct resize to 960x960
                 int target_size = 960;
                 int original_h = img.rows;
                 int original_w = img.cols;
 
-                // Calculate scale to fit the longer side to 960
-                float scale = static_cast<float>(target_size) / std::max(original_h, original_w);
+                // Direct resize to 960x960 without preserving aspect ratio
+                cv::resize(img, resize_img, cv::Size(target_size, target_size));
 
-                int new_h = static_cast<int>(original_h * scale);
-                int new_w = static_cast<int>(original_w * scale);
-
-                // Resize while preserving aspect ratio
-                cv::Mat scaled_img;
-                cv::resize(img, scaled_img, cv::Size(new_w, new_h));
-
-                // Create 960x960 canvas with white background
-                resize_img = cv::Mat(target_size, target_size, CV_8UC3, cv::Scalar(255, 255, 255));
-
-                // Calculate position to center the scaled image
-                int start_x = (target_size - new_w) / 2;
-                int start_y = (target_size - new_h) / 2;
-
-                // Copy scaled image to the center of the canvas
-                cv::Rect roi(start_x, start_y, new_w, new_h);
-                scaled_img.copyTo(resize_img(roi));
-
-                // Calculate ratios for postprocessing
+                // Calculate ratios for postprocessing (to map detected boxes back to original image)
                 ratio_h = static_cast<float>(target_size) / static_cast<float>(original_h);
                 ratio_w = static_cast<float>(target_size) / static_cast<float>(original_w);
             }
