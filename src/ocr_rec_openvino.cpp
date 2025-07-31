@@ -164,31 +164,34 @@ namespace PaddleOCR
                     for (int idx = beg_img_no; idx < end_img_no; ++idx)
                     {
                         cv::Mat resize_img;
-                        int original_h = img_list[indices[idx]].rows;
-                        int original_w = img_list[indices[idx]].cols;
+                        // int original_h = img_list[indices[idx]].rows;
+                        // int original_w = img_list[indices[idx]].cols;
 
-                        // Calculate scale to fit within [48,480] while preserving aspect ratio
-                        float scale_h = static_cast<float>(target_h) / original_h;
-                        float scale_w = static_cast<float>(target_w) / original_w;
-                        float scale = std::min(scale_h, scale_w);
+                        // // Calculate scale to fit within [48,480] while preserving aspect ratio
+                        // float scale_h = static_cast<float>(target_h) / original_h;
+                        // float scale_w = static_cast<float>(target_w) / original_w;
+                        // float scale = std::min(scale_h, scale_w);
 
-                        int new_h = static_cast<int>(original_h * scale);
-                        int new_w = static_cast<int>(original_w * scale);
+                        // int new_h = static_cast<int>(original_h * scale);
+                        // int new_w = static_cast<int>(original_w * scale);
 
-                        // Resize while preserving aspect ratio
-                        cv::Mat scaled_img;
-                        cv::resize(img_list[indices[idx]], scaled_img, cv::Size(new_w, new_h));
+                        // // Resize while preserving aspect ratio
+                        // cv::Mat scaled_img;
+                        // cv::resize(img_list[indices[idx]], scaled_img, cv::Size(new_w, new_h));
 
-                        // Create [48,480] canvas with white background
-                        resize_img = cv::Mat(target_h, target_w, CV_8UC3, cv::Scalar(255, 255, 255));
+                        // // Create [48,480] canvas with white background
+                        // resize_img = cv::Mat(target_h, target_w, CV_8UC3, cv::Scalar(255, 255, 255));
 
-                        // Left-align the scaled image (same as Python version)
-                        int start_x = 0; // Left-align instead of center
-                        int start_y = 0; // Top-align instead of center
+                        // // Left-align the scaled image (same as Python version)
+                        // int start_x = 0; // Left-align instead of center
+                        // int start_y = 0; // Top-align instead of center
 
-                        // Copy scaled image to the left-top of the canvas
-                        cv::Rect roi(start_x, start_y, new_w, new_h);
-                        scaled_img.copyTo(resize_img(roi));
+                        // // Copy scaled image to the left-top of the canvas
+                        // cv::Rect roi(start_x, start_y, new_w, new_h);
+                        // scaled_img.copyTo(resize_img(roi));
+
+                        // ! resize image
+                        cv::resize(img_list[indices[idx]], resize_img, cv::Size(target_w, target_h));
 
                         auto normalize_start = std::chrono::steady_clock::now();
                         this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
