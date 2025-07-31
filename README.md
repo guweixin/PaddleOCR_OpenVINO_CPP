@@ -40,8 +40,8 @@ model/
 |   |--inference.pdmodel
 |   |--inference.xml
 |   |--inference.bin
-|   |--inference_320_bs1.xml
-|   |--inference_320_bs1.bin 
+|   |--inference_640_bs1.xml
+|   |--inference_640_bs1.bin 
 ```
 
 <a name="12"></a>
@@ -78,45 +78,45 @@ ppocr.exe --det_model_dir=path_to_models/ch_PP-OCRv4_det_infer \
 
 - 通用参数
 
-|参数名称|类型|默认参数|意义|
-| :---: | :---: | :---: | :---: |
-|inference_framework|str|paddle|推理框架，paddle或者ov|
-|inference_device|str|CPU|推理设备，支持CPU/GPU/NPU(仅使用openvino时可用)|
-|image_dir|str|''|需要识别图像保存的路径|
-|output|str|./output|识别结果保存的路径|
-|gpu_id|int|0|GPU id，使用GPU时有效|
-|gpu_mem|int|4000|申请的GPU内存|
-|cpu_math_library_num_threads|int|10|CPU预测时的线程数，在机器核数充足的情况下，该值越大，预测速度越快|
-|enable_mkldnn|bool|true|是否使用mkldnn库|
+|           参数名称           | 类型  | 默认参数 |                               意义                                |
+| :--------------------------: | :---: | :------: | :---------------------------------------------------------------: |
+|     inference_framework      |  str  |  paddle  |                      推理框架，paddle或者ov                       |
+|       inference_device       |  str  |   CPU    |          推理设备，支持CPU/GPU/NPU(仅使用openvino时可用)          |
+|          image_dir           |  str  |    ''    |                      需要识别图像保存的路径                       |
+|            output            |  str  | ./output |                        识别结果保存的路径                         |
+|            gpu_id            |  int  |    0     |                       GPU id，使用GPU时有效                       |
+|           gpu_mem            |  int  |   4000   |                           申请的GPU内存                           |
+| cpu_math_library_num_threads |  int  |    10    | CPU预测时的线程数，在机器核数充足的情况下，该值越大，预测速度越快 |
+|        enable_mkldnn         | bool  |   true   |                         是否使用mkldnn库                          |
 
 - 前向相关
 
-|参数名称|类型|默认参数|意义|
-| :---: | :---: | :---: | :---: |
-|det|bool|true|前向是否执行文字检测|
-|rec|bool|true|前向是否执行文字识别|
+| 参数名称 | 类型  | 默认参数 |         意义         |
+| :------: | :---: | :------: | :------------------: |
+|   det    | bool  |   true   | 前向是否执行文字检测 |
+|   rec    | bool  |   true   | 前向是否执行文字识别 |
 
 - 检测模型相关
 
-|参数名称|类型|默认参数|意义|
-| :---: | :---: | :---: | :---: |
-|det_model_dir|string|-|检测模型inference model地址|
-|max_side_len|int|960|输入图像长宽大于960时，等比例缩放图像，使得图像最长边为960|
-|det_db_thresh|float|0.3|用于过滤DB预测的二值化图像，设置为0.-0.3对结果影响不明显|
-|det_db_box_thresh|float|0.5|DB后处理过滤box的阈值，如果检测存在漏框情况，可酌情减小|
-|det_db_unclip_ratio|float|1.6|表示文本框的紧致程度，越小则文本框更靠近文本|
-|det_db_score_mode|string|slow|slow:使用多边形框计算bbox score，fast:使用矩形框计算。矩形框计算速度更快，多边形框对弯曲文本区域计算更准确。|
-|visualize|bool|true|是否对结果进行可视化，为1时，预测结果会保存在`output`字段指定的文件夹下和输入图像同名的图像上。|
+|      参数名称       |  类型  | 默认参数 |                                                     意义                                                     |
+| :-----------------: | :----: | :------: | :----------------------------------------------------------------------------------------------------------: |
+|    det_model_dir    | string |    -     |                                         检测模型inference model地址                                          |
+|    max_side_len     |  int   |   960    |                          输入图像长宽大于960时，等比例缩放图像，使得图像最长边为960                          |
+|    det_db_thresh    | float  |   0.3    |                           用于过滤DB预测的二值化图像，设置为0.-0.3对结果影响不明显                           |
+|  det_db_box_thresh  | float  |   0.5    |                           DB后处理过滤box的阈值，如果检测存在漏框情况，可酌情减小                            |
+| det_db_unclip_ratio | float  |   1.6    |                                 表示文本框的紧致程度，越小则文本框更靠近文本                                 |
+|  det_db_score_mode  | string |   slow   | slow:使用多边形框计算bbox score，fast:使用矩形框计算。矩形框计算速度更快，多边形框对弯曲文本区域计算更准确。 |
+|      visualize      |  bool  |   true   |       是否对结果进行可视化，为1时，预测结果会保存在`output`字段指定的文件夹下和输入图像同名的图像上。        |
 
 - 文字识别模型相关
 
-|参数名称|类型|默认参数|意义|
-| :---: | :---: | :---: | :---: |
-|rec_model_dir|string|-|文字识别模型inference model地址|
-|rec_char_dict_path|string|../../ppocr/utils/ppocr_keys_v1.txt|字典文件|
-|rec_batch_num|int|6|文字识别模型batchsize|
-|rec_img_h|int|48|文字识别模型输入图像高度|
-|rec_img_w|int|320|文字识别模型输入图像宽度|
+|      参数名称      |  类型  |              默认参数               |              意义               |
+| :----------------: | :----: | :---------------------------------: | :-----------------------------: |
+|   rec_model_dir    | string |                  -                  | 文字识别模型inference model地址 |
+| rec_char_dict_path | string | ../../ppocr/utils/ppocr_keys_v1.txt |            字典文件             |
+|   rec_batch_num    |  int   |                  6                  |      文字识别模型batchsize      |
+|     rec_img_h      |  int   |                 48                  |    文字识别模型输入图像高度     |
+|     rec_img_w      |  int   |                 320                 |    文字识别模型输入图像宽度     |
 
 
 * PaddleOCR也支持多语言的预测，更多支持的语言和模型可以参考[识别文档](../../doc/doc_ch/recognition.md)中的多语言字典与模型部分，如果希望进行多语言预测，只需将修改`rec_char_dict_path`（字典文件路径）以及`rec_model_dir`（inference模型路径）字段即可。

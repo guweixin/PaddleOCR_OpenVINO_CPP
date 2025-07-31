@@ -55,8 +55,8 @@ namespace PaddleOCR
                 {
                     dir += "/";
                 }
-                model_small_path = dir + "inference_320_bs1.xml";
-                model_big_path = dir + "inference_640_bs1.xml";
+                model_small_path = dir + "inference_640_bs1.xml";
+                model_big_path = dir + "inference_1280_bs1.xml";
 
                 // Load small model
                 std::ifstream file_small(model_small_path);
