@@ -151,8 +151,8 @@ void check_params()
       if (FLAGS_inference_device == "NPU")
       {
         // For NPU, check if the directory exists and contains required model files
-        std::string model_small_path = rec_model_path + "/inference_320_bs1.xml";
-        std::string model_big_path = rec_model_path + "/inference_640_bs1.xml";
+        std::string model_small_path = rec_model_path + "/inference_480_bs1.xml";
+        std::string model_big_path = rec_model_path + "/inference_800_bs1.xml";
 
         std::ifstream file_small(model_small_path);
         std::ifstream file_big(model_big_path);
@@ -160,7 +160,7 @@ void check_params()
         if (!file_small.good() || !file_big.good())
         {
           std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
-          std::cout << "Required files: inference_320_bs1.xml, inference_640_bs1.xml" << std::endl;
+          std::cout << "Required files: inference_480_bs1.xml, inference_800_bs1.xml" << std::endl;
           exit(1);
         }
       }
@@ -240,6 +240,10 @@ void check_params()
 
 std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
 {
+  // ///////////////////////
+  // // Initialize random seed for random colors
+  // srand(static_cast<unsigned int>(time(nullptr)));
+  // ///////////////////////
   auto start_time_imread = std::chrono::high_resolution_clock::now();
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
   std::cout << "image_path:" << image_path << std::endl;
@@ -256,12 +260,96 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
 
   std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
 
+  // ///////////////////////
+  // // Create directories if they don't exist
+  // std::string crop_dir = "crop_img";
+  // std::string show_dir = "show_img";
+  // if (!Utility::PathExists(crop_dir))
+  // {
+  //   Utility::CreateDir(crop_dir);
+  // }
+  // if (!Utility::PathExists(show_dir))
+  // {
+  //   Utility::CreateDir(show_dir);
+  // }
+
+  // // Extract base name from image path for naming files
+  // std::string base_name = image_path.substr(image_path.find_last_of("/\\") + 1);
+  // base_name = base_name.substr(0, base_name.find_last_of('.'));
+
+  // // Create a copy of the original image for drawing boxes
+  // cv::Mat show_img = img.clone();
+  // ///////////////////////
   std::string result_text = "";
   for (const auto &res : ocr_results)
+  // for (size_t i = 0; i < ocr_results.size(); ++i)
   {
+    // ///////////////////////
+    // const auto &res = ocr_results[i];
+    // ///////////////////////
     result_text += res.text + "\n";
-  }
+    // ///////////////////////
+    // // Process text box (these are the final filtered results from OCR)
+    // if (res.box.size() == 4 && res.box[0].size() == 2)
+    // {
+    //   // Draw polygon for the text box on show image with random color
+    //   std::vector<cv::Point> points;
+    //   for (const auto &point : res.box)
+    //   {
+    //     points.emplace_back(point[0], point[1]);
+    //   }
 
+    //   // Generate random color for each text box
+    //   cv::Scalar random_color(rand() % 256, rand() % 256, rand() % 256);
+
+    //   // Draw the text box with random color (no text displayed)
+    //   cv::polylines(show_img, std::vector<std::vector<cv::Point>>{points}, true, random_color, 3);
+
+    //   // Save cropped text box image (final filtered results)
+    //   // Get bounding box coordinates
+    //   int min_x = img.cols, min_y = img.rows, max_x = 0, max_y = 0;
+    //   for (const auto &point : res.box)
+    //   {
+    //     if (point[0] < min_x)
+    //       min_x = point[0];
+    //     if (point[0] > max_x)
+    //       max_x = point[0];
+    //     if (point[1] < min_y)
+    //       min_y = point[1];
+    //     if (point[1] > max_y)
+    //       max_y = point[1];
+    //   }
+
+    //   // Ensure coordinates are within image bounds
+    //   if (min_x < 0)
+    //     min_x = 0;
+    //   if (min_y < 0)
+    //     min_y = 0;
+    //   if (max_x >= img.cols)
+    //     max_x = img.cols - 1;
+    //   if (max_y >= img.rows)
+    //     max_y = img.rows - 1;
+
+    //   if (max_x > min_x && max_y > min_y)
+    //   {
+    //     // Crop the image
+    //     cv::Rect crop_rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1);
+    //     cv::Mat cropped_img = img(crop_rect);
+
+    //     // Save cropped image
+    //     std::string crop_filename = crop_dir + "/" + base_name + "_crop_" + std::to_string(i) + ".jpg";
+    //     cv::imwrite(crop_filename, cropped_img);
+    //     std::cout << "Saved cropped text box: " << crop_filename << " (text: " << res.text << ")" << std::endl;
+    //   }
+    // }
+    // ///////////////////////
+  }
+  // ///////////////////////
+  // // Save the image with drawn text boxes
+  // std::string show_filename = show_dir + "/" + base_name + "_boxes.jpg";
+  // cv::imwrite(show_filename, show_img);
+  // std::cout << "Saved image with text boxes: " << show_filename << " (found " << ocr_results.size() << " text boxes)" << std::endl;
+  // ///////////////////////
   return result_text;
 }
 

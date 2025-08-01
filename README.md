@@ -40,8 +40,8 @@ model/
 |   |--inference.pdmodel
 |   |--inference.xml
 |   |--inference.bin
-|   |--inference_320_bs1.xml
-|   |--inference_320_bs1.bin 
+|   |--inference_480_bs1.xml
+|   |--inference_480_bs1.bin 
 ```
 
 <a name="12"></a>

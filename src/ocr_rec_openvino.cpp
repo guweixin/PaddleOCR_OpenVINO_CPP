@@ -55,8 +55,8 @@ namespace PaddleOCR
                 {
                     dir += "/";
                 }
-                model_small_path = dir + "inference_320_bs1.xml";
-                model_big_path = dir + "inference_640_bs1.xml";
+                model_small_path = dir + "inference_480_bs1.xml";
+                model_big_path = dir + "inference_800_bs1.xml";
 
                 // Load small model
                 std::ifstream file_small(model_small_path);
@@ -325,6 +325,9 @@ namespace PaddleOCR
                 // Copy scaled image to the canvas
                 cv::Rect roi(start_x, start_y, new_w, new_h);
                 scaled_img.copyTo(resize_img(roi));
+
+                // // ! just resize
+                // cv::resize(img_list[indices[idx]], resize_img, cv::Size(target_w, target_h));
 
                 auto normalize_start = std::chrono::steady_clock::now();
                 this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
