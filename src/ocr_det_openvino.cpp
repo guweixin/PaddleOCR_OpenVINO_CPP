@@ -109,35 +109,65 @@ namespace PaddleOCR
             // Preprocessing - device-specific optimizations
             if (device_ == "NPU")
             {
-                // NPU specific preprocessing: resize to 960x960 with aspect ratio preserved and white padding
-                int target_size = 960;
+                // NPU specific preprocessing: conditional resize with white padding
+                // Get target dimensions from detection model input shape
+                auto input_tensor = infer_request_.get_input_tensor();
+                auto input_shape = input_tensor.get_shape();
+                int target_h = static_cast<int>(input_shape[2]); // Height dimension
+                int target_w = static_cast<int>(input_shape[3]); // Width dimension
+
                 int original_h = img.rows;
                 int original_w = img.cols;
 
-                // Calculate scale to fit the longer side to 960
-                float scale = static_cast<float>(target_size) / std::max(original_h, original_w);
+                // Calculate scale to fit within target dimensions while preserving aspect ratio
+                float scale_h = static_cast<float>(target_h) / static_cast<float>(original_h);
+                float scale_w = static_cast<float>(target_w) / static_cast<float>(original_w);
+                float scale = std::min(scale_h, scale_w);
 
-                int new_h = static_cast<int>(original_h * scale);
-                int new_w = static_cast<int>(original_w * scale);
+                cv::Mat processed_img;
+                float actual_scale = 1.0f;
+                int start_x = 0, start_y = 0;
 
-                // Resize while preserving aspect ratio
-                cv::Mat scaled_img;
-                cv::resize(img, scaled_img, cv::Size(new_w, new_h));
+                if (scale < 1.0f)
+                {
+                    // Scale down if image is larger than target dimensions
+                    actual_scale = scale;
+                    int new_h = static_cast<int>(original_h * actual_scale);
+                    int new_w = static_cast<int>(original_w * actual_scale);
+                    cv::resize(img, processed_img, cv::Size(new_w, new_h));
+                }
+                else
+                {
+                    // Keep original size if image fits within target dimensions
+                    processed_img = img.clone();
+                    actual_scale = 1.0f;
+                    scale = actual_scale;
+                }
 
-                // Create 960x960 canvas with white background
-                resize_img = cv::Mat(target_size, target_size, CV_8UC3, cv::Scalar(255, 255, 255));
+                // Create canvas with white background using model input dimensions
+                resize_img = cv::Mat(target_h, target_w, CV_8UC3, cv::Scalar(255, 255, 255));
 
-                // Calculate position to center the scaled image
-                int start_x = (target_size - new_w) / 2;
-                int start_y = (target_size - new_h) / 2;
+                // Place processed image at top-left corner (0, 0) instead of center
+                start_x = 0;
+                start_y = 0;
 
-                // Copy scaled image to the center of the canvas
-                cv::Rect roi(start_x, start_y, new_w, new_h);
-                scaled_img.copyTo(resize_img(roi));
+                // Copy processed image to the top-left corner of the canvas
+                cv::Rect roi(start_x, start_y, processed_img.cols, processed_img.rows);
+                processed_img.copyTo(resize_img(roi));
 
-                // Calculate ratios for postprocessing
-                ratio_h = static_cast<float>(target_size) / static_cast<float>(original_h);
-                ratio_w = static_cast<float>(target_size) / static_cast<float>(original_w);
+                // Calculate ratio values for NPU coordinate mapping
+                if (scale < 1.0f)
+                {
+                    // Image was scaled down - need to map coordinates back
+                    ratio_h = 1.0f / actual_scale;
+                    ratio_w = 1.0f / actual_scale;
+                }
+                else
+                {
+                    // Image was only padded - coordinates don't need mapping
+                    ratio_h = 1.0f;
+                    ratio_w = 1.0f;
+                }
             }
             else
             {
@@ -279,8 +309,31 @@ namespace PaddleOCR
             auto dilation_end = std::chrono::steady_clock::now();
 
             auto boxes_from_bitmap_start = std::chrono::steady_clock::now();
-            boxes = std::move(post_processor_.BoxesFromBitmap(
-                pred_map, bit_map, srcimg.cols, srcimg.rows));
+            if (device_ == "NPU")
+            {
+                if (ratio_h != 1.0f || ratio_w != 1.0f)
+                {
+                    // For NPU, apply ratio mapping to the detected boxes
+                    boxes = std::move(post_processor_.BoxesFromBitmap(
+                        pred_map, bit_map, srcimg.cols, srcimg.rows));
+                }
+                else
+                {
+                    auto input_tensor = infer_request_.get_input_tensor();
+                    auto input_shape = input_tensor.get_shape();
+                    int target_h = static_cast<int>(input_shape[2]); // Height dimension
+                    int target_w = static_cast<int>(input_shape[3]); // Width dimension
+                    // For NPU, use fixed dimensions for 960 model
+                    boxes = std::move(post_processor_.BoxesFromBitmap(
+                        pred_map, bit_map, target_h, target_w));
+                }
+            }
+            else
+            {
+                // For CPU/GPU, use original image dimensions
+                boxes = std::move(post_processor_.BoxesFromBitmap(
+                    pred_map, bit_map, srcimg.cols, srcimg.rows));
+            }
             auto boxes_from_bitmap_end = std::chrono::steady_clock::now();
 
             auto filter_tag_start = std::chrono::steady_clock::now();
