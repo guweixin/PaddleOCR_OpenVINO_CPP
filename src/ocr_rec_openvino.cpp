@@ -227,8 +227,8 @@ namespace PaddleOCR
         int big_model_width = static_cast<int>(big_input_shape[big_input_shape.size() - 1]);
         int target_h = static_cast<int>(big_input_shape[big_input_shape.size() - 2]);
 
-        std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
-        std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
+        // std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
+        // std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
         auto sort_start = std::chrono::steady_clock::now();
         // Calculate aspect ratio and sort indices for optimization
         std::vector<float> width_list;
