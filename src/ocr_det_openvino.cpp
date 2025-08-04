@@ -195,11 +195,11 @@ namespace PaddleOCR
             // Inference with OpenVINO - standard approach
             auto inference_start = std::chrono::steady_clock::now();
 
-            // Declare timing variables outside of conditional blocks
-            std::chrono::steady_clock::time_point shape_start, shape_end;
-            std::chrono::steady_clock::time_point cpu_to_gpu_start, cpu_to_gpu_end;
-            std::chrono::steady_clock::time_point pure_inference_start, pure_inference_end;
-            std::chrono::steady_clock::time_point gpu_to_cpu_start, gpu_to_cpu_end;
+            // // Declare timing variables outside of conditional blocks
+            // std::chrono::steady_clock::time_point shape_start, shape_end;
+            // std::chrono::steady_clock::time_point cpu_to_gpu_start, cpu_to_gpu_end;
+            // std::chrono::steady_clock::time_point pure_inference_start, pure_inference_end;
+            // std::chrono::steady_clock::time_point gpu_to_cpu_start, gpu_to_cpu_end;
             ov::Shape output_shape;
             size_t out_num = 0;
 
@@ -208,30 +208,30 @@ namespace PaddleOCR
             auto input_tensor = infer_request_.get_input_tensor();
 
             // Set input shape efficiently
-            shape_start = std::chrono::steady_clock::now();
+            // shape_start = std::chrono::steady_clock::now();
             ov::Shape target_shape = {1, 3, static_cast<size_t>(resize_img.rows), static_cast<size_t>(resize_img.cols)};
             if (input_tensor.get_shape() != target_shape)
             {
                 input_tensor.set_shape(target_shape);
             }
-            shape_end = std::chrono::steady_clock::now();
+            // shape_end = std::chrono::steady_clock::now();
 
             // CPU to GPU data transfer timing
-            cpu_to_gpu_start = std::chrono::steady_clock::now();
+            // cpu_to_gpu_start = std::chrono::steady_clock::now();
             float *input_data = input_tensor.data<float>();
             if (input_data && !input.empty())
             {
                 std::copy(input.begin(), input.end(), input_data);
             }
-            cpu_to_gpu_end = std::chrono::steady_clock::now();
+            // cpu_to_gpu_end = std::chrono::steady_clock::now();
 
             // Pure inference timing
-            pure_inference_start = std::chrono::steady_clock::now();
+            // pure_inference_start = std::chrono::steady_clock::now();
             infer_request_.infer();
-            pure_inference_end = std::chrono::steady_clock::now();
+            // pure_inference_end = std::chrono::steady_clock::now();
 
             // GPU to CPU data transfer timing
-            gpu_to_cpu_start = std::chrono::steady_clock::now();
+            // gpu_to_cpu_start = std::chrono::steady_clock::now();
             auto output_tensor = infer_request_.get_output_tensor();
             output_shape = output_tensor.get_shape();
 
@@ -242,7 +242,7 @@ namespace PaddleOCR
             // Direct memory copy from GPU
             float *output_data = output_tensor.data<float>();
             std::copy(output_data, output_data + out_num, out_data.begin());
-            gpu_to_cpu_end = std::chrono::steady_clock::now();
+            // gpu_to_cpu_end = std::chrono::steady_clock::now();
 
             // // Calculate detailed memory transfer timings
             // std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
