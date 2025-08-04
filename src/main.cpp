@@ -151,16 +151,18 @@ void check_params()
       if (FLAGS_inference_device == "NPU")
       {
         // For NPU, check if the directory exists and contains required model files
-        std::string model_small_path = rec_model_path + "/inference_480_bs1.xml";
+        std::string model_small_path = rec_model_path + "/inference_240_bs1.xml";
+        std::string model_medium_path = rec_model_path + "/inference_480_bs1.xml";
         std::string model_big_path = rec_model_path + "/inference_800_bs1.xml";
 
         std::ifstream file_small(model_small_path);
+        std::ifstream file_medium(model_medium_path);
         std::ifstream file_big(model_big_path);
 
-        if (!file_small.good() || !file_big.good())
+        if (!file_small.good() || !file_medium.good() || !file_big.good())
         {
           std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
-          std::cout << "Required files: inference_480_bs1.xml, inference_800_bs1.xml" << std::endl;
+          std::cout << "Required files: inference_240_bs1.xml, inference_480_bs1.xml, inference_800_bs1.xml" << std::endl;
           exit(1);
         }
       }

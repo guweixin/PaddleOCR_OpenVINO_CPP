@@ -47,7 +47,7 @@ namespace PaddleOCR
             if (device_ == "NPU")
             {
                 // NPU: Load dual models
-                std::string model_small_path, model_big_path;
+                std::string model_small_path, model_medium_path, model_big_path;
 
                 // model_dir is a directory path, ensure it ends with a path separator
                 std::string dir = model_dir;
@@ -55,7 +55,8 @@ namespace PaddleOCR
                 {
                     dir += "/";
                 }
-                model_small_path = dir + "inference_480_bs1.xml";
+                model_small_path = dir + "inference_240_bs1.xml";
+                model_medium_path = dir + "inference_480_bs1.xml";
                 model_big_path = dir + "inference_800_bs1.xml";
 
                 // Load small model
@@ -66,6 +67,15 @@ namespace PaddleOCR
                     exit(1);
                 }
                 file_small.close();
+
+                // Load medium model
+                std::ifstream file_medium(model_medium_path);
+                if (!file_medium.good())
+                {
+                    std::cerr << "[ERROR] medium model file not found: " << model_medium_path << std::endl;
+                    exit(1);
+                }
+                file_medium.close();
 
                 // Load big model
                 std::ifstream file_big(model_big_path);
@@ -78,16 +88,20 @@ namespace PaddleOCR
 
                 // Load both models
                 auto model_small = core_.read_model(model_small_path);
+                auto model_medium = core_.read_model(model_medium_path);
                 auto model_big = core_.read_model(model_big_path);
                 std::cout << "[OpenVINO] Both NPU recognition model files loaded successfully" << std::endl;
 
                 // Compile both models for NPU
                 compiled_model_small_ = core_.compile_model(model_small, device_, config);
                 std::cout << "[OpenVINO] model_small successfully" << std::endl;
+                compiled_model_medium_ = core_.compile_model(model_medium, device_, config);
+                std::cout << "[OpenVINO] model_medium successfully" << std::endl;
                 compiled_model_big_ = core_.compile_model(model_big, device_, config);
                 std::cout << "[OpenVINO] model_big successfully" << std::endl;
                 // Create inference requests
                 infer_request_small_ = compiled_model_small_.create_infer_request();
+                infer_request_medium_ = compiled_model_medium_.create_infer_request();
                 infer_request_big_ = compiled_model_big_.create_infer_request();
 
                 std::cout << "[OpenVINO] Both NPU recognition models compiled successfully" << std::endl;
@@ -221,12 +235,15 @@ namespace PaddleOCR
 
         // Get input dimensions from both models
         auto small_input_shape = compiled_model_small_.input().get_shape();
+        auto medium_input_shape = compiled_model_medium_.input().get_shape();
         auto big_input_shape = compiled_model_big_.input().get_shape();
         int small_model_width = static_cast<int>(small_input_shape[small_input_shape.size() - 1]);
+        int medium_model_width = static_cast<int>(medium_input_shape[medium_input_shape.size() - 1]);
         int big_model_width = static_cast<int>(big_input_shape[big_input_shape.size() - 1]);
         int target_h = static_cast<int>(big_input_shape[big_input_shape.size() - 2]);
 
         std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
+        std::cout << "[NPU] Medium model input width: " << medium_model_width << std::endl;
         std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
         auto sort_start = std::chrono::steady_clock::now();
         // Calculate aspect ratio and sort indices for optimization
@@ -254,20 +271,39 @@ namespace PaddleOCR
 
             // std::cout << "[NPU] Model input height: " << target_h << std::endl;
             // Determine which model to use based on aspect ratio
-            bool use_small_model = true;
+            int model_type = 0; // 0 for small; 1 for medium; 2 for big
             int target_w = small_model_width;
 
             // Check the aspect ratio of current batch to determine model
+            float max_aspect_ratio = 0.0f;
             for (int idx = beg_img_no; idx < end_img_no; ++idx)
             {
                 float aspect_ratio = width_list[indices[idx]];
-                if (aspect_ratio > small_model_width / target_h)
-                {
-                    use_small_model = false;
-                    target_w = big_model_width;
-                    break; // If any image has ratio > 10, use big model
-                }
+                max_aspect_ratio = std::max(max_aspect_ratio, aspect_ratio);
             }
+
+            // Select model based on maximum aspect ratio in the batch
+            float small_threshold = static_cast<float>(small_model_width) / static_cast<float>(target_h);
+            float medium_threshold = static_cast<float>(medium_model_width) / static_cast<float>(target_h);
+
+            if (max_aspect_ratio <= small_threshold)
+            {
+                model_type = 0;
+                target_w = small_model_width;
+            }
+            else if (max_aspect_ratio <= medium_threshold)
+            {
+                model_type = 1;
+                target_w = medium_model_width;
+            }
+            else
+            {
+                model_type = 2;
+                target_w = big_model_width;
+            }
+
+            std::cout << "[NPU] Batch " << beg_img_no / batch_num + 1 << ": Using model_type " << model_type
+                      << " (target_w=" << target_w << ") for max_aspect_ratio=" << max_aspect_ratio << std::endl;
 
             auto resize_start = std::chrono::steady_clock::now();
 
@@ -296,26 +332,18 @@ namespace PaddleOCR
 
                 int start_x, start_y;
 
-                if (aspect_ratio <= small_model_width / target_h)
+                // Model-specific image placement strategy
+                if (model_type == 2) // Big model
                 {
-                    // Aspect ratio <= 10: use small model, scale and pad on the right
-                    // Fixed size: 48xsmall
-                    start_x = 0;                      // Left-align
-                    start_y = (target_h - new_h) / 2; // Center vertically
+                    // For big model: center both horizontally and vertically
+                    start_x = (target_w - new_w) / 2;
+                    start_y = (target_h - new_h) / 2;
                 }
-                else if (aspect_ratio <= big_model_width / target_h)
+                else // Small or medium model
                 {
-                    // 10 < Aspect ratio <= 20: use big model, scale and pad on the right
-                    // Fixed size: 48xbig
-                    start_x = 0;                      // Left-align
-                    start_y = (target_h - new_h) / 2; // Center vertically
-                }
-                else
-                {
-                    // Aspect ratio > 20: use big model, scale and center with top-bottom padding
-                    // Fixed size: 48xbig
-                    start_x = (target_w - new_w) / 2; // Center horizontally
-                    start_y = (target_h - new_h) / 2; // Center vertically
+                    // For small/medium model: left-align horizontally, center vertically
+                    start_x = 0;
+                    start_y = (target_h - new_h) / 2;
                 }
 
                 // Ensure we don't go out of bounds
@@ -349,8 +377,21 @@ namespace PaddleOCR
 
             // Inference with OpenVINO - choose appropriate model for NPU
             auto inference_start = std::chrono::steady_clock::now();
+            ov::InferRequest *current_infer_request;
+            if (model_type == 0)
+            {
+                current_infer_request = &infer_request_small_;
+            }
+            else if (model_type == 1)
+            {
+                current_infer_request = &infer_request_medium_;
+            }
+            else
+            {
+                current_infer_request = &infer_request_big_;
+            }
 
-            ov::InferRequest *current_infer_request = use_small_model ? &infer_request_small_ : &infer_request_big_;
+            // ov::InferRequest *current_infer_request = use_small_model ? &infer_request_small_ : &infer_request_big_;
 
             // Get input tensor
             auto input_tensor = current_infer_request->get_input_tensor();
