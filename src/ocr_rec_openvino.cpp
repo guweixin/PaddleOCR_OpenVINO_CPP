@@ -242,9 +242,9 @@ namespace PaddleOCR
         int big_model_width = static_cast<int>(big_input_shape[big_input_shape.size() - 1]);
         int target_h = static_cast<int>(big_input_shape[big_input_shape.size() - 2]);
 
-        std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
-        std::cout << "[NPU] Medium model input width: " << medium_model_width << std::endl;
-        std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
+        // std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
+        // std::cout << "[NPU] Medium model input width: " << medium_model_width << std::endl;
+        // std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
         auto sort_start = std::chrono::steady_clock::now();
         // Calculate aspect ratio and sort indices for optimization
         std::vector<float> width_list;
@@ -302,8 +302,8 @@ namespace PaddleOCR
                 target_w = big_model_width;
             }
 
-            std::cout << "[NPU] Batch " << beg_img_no / batch_num + 1 << ": Using model_type " << model_type
-                      << " (target_w=" << target_w << ") for max_aspect_ratio=" << max_aspect_ratio << std::endl;
+            // std::cout << "[NPU] Batch " << beg_img_no / batch_num + 1 << ": Using model_type " << model_type
+            //           << " (target_w=" << target_w << ") for max_aspect_ratio=" << max_aspect_ratio << std::endl;
 
             auto resize_start = std::chrono::steady_clock::now();
 
