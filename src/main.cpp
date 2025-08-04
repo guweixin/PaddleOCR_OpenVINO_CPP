@@ -226,13 +226,13 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
   // Initialize random seed for random colors
   srand(static_cast<unsigned int>(time(nullptr)));
 
-  auto start_time_imread = std::chrono::high_resolution_clock::now();
+  // auto start_time_imread = std::chrono::high_resolution_clock::now();
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
-  std::cout << "image_path:" << image_path << std::endl;
-  auto end_time_imread = std::chrono::high_resolution_clock::now();
-  double imread_time = std::chrono::duration<double, std::milli>(end_time_imread - start_time_imread).count();
-  std::cout << "  " << std::endl;
-  std::cout << "########### img_time: " << (imread_time) << " ms" << std::endl;
+  // std::cout << "image_path:" << image_path << std::endl;
+  // auto end_time_imread = std::chrono::high_resolution_clock::now();
+  // double imread_time = std::chrono::duration<double, std::milli>(end_time_imread - start_time_imread).count();
+  // std::cout << "  " << std::endl;
+  // std::cout << "########### img_time: " << (imread_time) << " ms" << std::endl;
 
   if (!img.data)
   {
@@ -268,64 +268,64 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
     result_text += res.text + "\n";
 
     // Process text box (these are the final filtered results from OCR)
-    if (res.box.size() == 4 && res.box[0].size() == 2)
-    {
-      // Draw polygon for the text box on show image with random color
-      std::vector<cv::Point> points;
-      for (const auto &point : res.box)
-      {
-        points.emplace_back(point[0], point[1]);
-      }
+    //   if (res.box.size() == 4 && res.box[0].size() == 2)
+    //   {
+    //     // Draw polygon for the text box on show image with random color
+    //     std::vector<cv::Point> points;
+    //     for (const auto &point : res.box)
+    //     {
+    //       points.emplace_back(point[0], point[1]);
+    //     }
 
-      // Generate random color for each text box
-      cv::Scalar random_color(rand() % 256, rand() % 256, rand() % 256);
+    //     // Generate random color for each text box
+    //     cv::Scalar random_color(rand() % 256, rand() % 256, rand() % 256);
 
-      // Draw the text box with random color (no text displayed)
-      cv::polylines(show_img, std::vector<std::vector<cv::Point>>{points}, true, random_color, 3);
+    //     // Draw the text box with random color (no text displayed)
+    //     cv::polylines(show_img, std::vector<std::vector<cv::Point>>{points}, true, random_color, 3);
 
-      // Save cropped text box image (final filtered results)
-      // Get bounding box coordinates
-      int min_x = img.cols, min_y = img.rows, max_x = 0, max_y = 0;
-      for (const auto &point : res.box)
-      {
-        if (point[0] < min_x)
-          min_x = point[0];
-        if (point[0] > max_x)
-          max_x = point[0];
-        if (point[1] < min_y)
-          min_y = point[1];
-        if (point[1] > max_y)
-          max_y = point[1];
-      }
+    //     // Save cropped text box image (final filtered results)
+    //     // Get bounding box coordinates
+    //     int min_x = img.cols, min_y = img.rows, max_x = 0, max_y = 0;
+    //     for (const auto &point : res.box)
+    //     {
+    //       if (point[0] < min_x)
+    //         min_x = point[0];
+    //       if (point[0] > max_x)
+    //         max_x = point[0];
+    //       if (point[1] < min_y)
+    //         min_y = point[1];
+    //       if (point[1] > max_y)
+    //         max_y = point[1];
+    //     }
 
-      // Ensure coordinates are within image bounds
-      if (min_x < 0)
-        min_x = 0;
-      if (min_y < 0)
-        min_y = 0;
-      if (max_x >= img.cols)
-        max_x = img.cols - 1;
-      if (max_y >= img.rows)
-        max_y = img.rows - 1;
+    //     // Ensure coordinates are within image bounds
+    //     if (min_x < 0)
+    //       min_x = 0;
+    //     if (min_y < 0)
+    //       min_y = 0;
+    //     if (max_x >= img.cols)
+    //       max_x = img.cols - 1;
+    //     if (max_y >= img.rows)
+    //       max_y = img.rows - 1;
 
-      if (max_x > min_x && max_y > min_y)
-      {
-        // Crop the image
-        cv::Rect crop_rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1);
-        cv::Mat cropped_img = img(crop_rect);
+    //     if (max_x > min_x && max_y > min_y)
+    //     {
+    //       // Crop the image
+    //       cv::Rect crop_rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1);
+    //       cv::Mat cropped_img = img(crop_rect);
 
-        // Save cropped image
-        std::string crop_filename = crop_dir + "/" + base_name + "_crop_" + std::to_string(i) + ".jpg";
-        cv::imwrite(crop_filename, cropped_img);
-        std::cout << "Saved cropped text box: " << crop_filename << " (text: " << res.text << ")" << std::endl;
-      }
-    }
+    //       // Save cropped image
+    //       std::string crop_filename = crop_dir + "/" + base_name + "_crop_" + std::to_string(i) + ".jpg";
+    //       cv::imwrite(crop_filename, cropped_img);
+    //       std::cout << "Saved cropped text box: " << crop_filename << " (text: " << res.text << ")" << std::endl;
+    //     }
+    //   }
   }
 
-  // Save the image with drawn text boxes
-  std::string show_filename = show_dir + "/" + base_name + "_boxes.jpg";
-  cv::imwrite(show_filename, show_img);
-  std::cout << "Saved image with text boxes: " << show_filename << " (found " << ocr_results.size() << " text boxes)" << std::endl;
+  // // Save the image with drawn text boxes
+  // std::string show_filename = show_dir + "/" + base_name + "_boxes.jpg";
+  // cv::imwrite(show_filename, show_img);
+  // std::cout << "Saved image with text boxes: " << show_filename << " (found " << ocr_results.size() << " text boxes)" << std::endl;
 
   return result_text;
 }
@@ -402,7 +402,7 @@ void run_batch_processing_mode()
     std::string image_text = ocr_single_image(ocr, cv_all_img_names[i]);
     auto end_time = std::chrono::high_resolution_clock::now();
     double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
-    std::cout << "image inference_time: " << (inference_time) << " ms" << std::endl;
+    // std::cout << "image inference_time: " << (inference_time) << " ms" << std::endl;
     sum_inference_time += inference_time;
 
     // Measure memory (not included in inference time)

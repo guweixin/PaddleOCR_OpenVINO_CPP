@@ -49,15 +49,15 @@ namespace PaddleOCR
             std::cout << "[OpenVINO] Recognition model file loaded successfully" << std::endl;
 
             // Configure device-specific settings
-            ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
+            ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}, {"CACHE_DIR", "./openvino_cache"}};
             if (device_ == "CPU")
             {
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
             }
-            else if (device_ == "GPU")
+            else if (device_ == "GPU" || device_ == "NPU")
             {
-                // GPU device - using default configurations
+                config["INFERENCE_PRECISION_HINT"] = "f16";
             }
             // Compile the model for the specified device
             compiled_model_ = core_.compile_model(model, device_, config);

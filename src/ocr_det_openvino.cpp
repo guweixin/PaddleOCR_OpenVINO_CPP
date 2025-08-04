@@ -56,15 +56,15 @@ namespace PaddleOCR
             std::cout << "[OpenVINO] Model file loaded successfully" << std::endl;
 
             // Configure device-specific settings
-            ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
+            ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}, {"CACHE_DIR", "./openvino_cache"}};
             if (device_ == "CPU")
             {
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
             }
-            else if (device_ == "GPU")
+            else if (device_ == "GPU" || device_ == "NPU")
             {
-                // GPU device - using default configurations
+                config["INFERENCE_PRECISION_HINT"] = "f16";
             }
             // Compile the model for the specified device
             std::cout << "[OpenVINO] Compiling model for device: " << device_ << std::endl;
@@ -244,38 +244,38 @@ namespace PaddleOCR
             std::copy(output_data, output_data + out_num, out_data.begin());
             gpu_to_cpu_end = std::chrono::steady_clock::now();
 
-            // Calculate detailed memory transfer timings
-            std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
-            std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
-            std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
-            std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
+            // // Calculate detailed memory transfer timings
+            // std::chrono::duration<float, std::milli> shape_diff = shape_end - shape_start;
+            // std::chrono::duration<float, std::milli> cpu_to_gpu_diff = cpu_to_gpu_end - cpu_to_gpu_start;
+            // std::chrono::duration<float, std::milli> pure_inference_diff = pure_inference_end - pure_inference_start;
+            // std::chrono::duration<float, std::milli> gpu_to_cpu_diff = gpu_to_cpu_end - gpu_to_cpu_start;
 
-            std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
-            std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
-            std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
-            std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
-            shape_time = std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
-            cpu_to_gpu_time = std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
-            pure_inference_time = std::chrono::duration<double, std::milli>(pure_inference_end - pure_inference_start).count();
-            gpu_to_cpu_time = std::chrono::duration<double, std::milli>(gpu_to_cpu_end - gpu_to_cpu_start).count();
+            // std::cout << "---------shape_time: " << std::fixed << std::setprecision(6) << shape_diff.count() << "ms" << std::endl;
+            // std::cout << "---------cpu_to_gpu_time: " << std::fixed << std::setprecision(6) << cpu_to_gpu_diff.count() << "ms" << std::endl;
+            // std::cout << "---------pure_infer_time: " << std::fixed << std::setprecision(6) << pure_inference_diff.count() << "ms" << std::endl;
+            // std::cout << "---------gpu_to_cpu_time: " << std::fixed << std::setprecision(6) << gpu_to_cpu_diff.count() << "ms" << std::endl;
+            // shape_time = std::chrono::duration<double, std::milli>(shape_end - shape_start).count();
+            // cpu_to_gpu_time = std::chrono::duration<double, std::milli>(cpu_to_gpu_end - cpu_to_gpu_start).count();
+            // pure_inference_time = std::chrono::duration<double, std::milli>(pure_inference_end - pure_inference_start).count();
+            // gpu_to_cpu_time = std::chrono::duration<double, std::milli>(gpu_to_cpu_end - gpu_to_cpu_start).count();
 
-            // Calculate data sizes for statistics
-            input_size_mb = (input.size() * sizeof(float)) / (1024 * 1024);
-            output_size_mb = (out_num * sizeof(float)) / (1024 * 1024);
+            // // Calculate data sizes for statistics
+            // input_size_mb = (input.size() * sizeof(float)) / (1024 * 1024);
+            // output_size_mb = (out_num * sizeof(float)) / (1024 * 1024);
 
-            // Accumulate timing statistics for detection
-            total_det_shape_time += shape_time;
-            total_det_cpu_to_gpu_time += cpu_to_gpu_time;
-            total_det_pure_inference_time += pure_inference_time;
-            total_det_gpu_to_cpu_time += gpu_to_cpu_time;
-            total_det_input_size_mb += input_size_mb;
-            total_det_output_size_mb += output_size_mb;
-            total_det_images++;
+            // // Accumulate timing statistics for detection
+            // total_det_shape_time += shape_time;
+            // total_det_cpu_to_gpu_time += cpu_to_gpu_time;
+            // total_det_pure_inference_time += pure_inference_time;
+            // total_det_gpu_to_cpu_time += gpu_to_cpu_time;
+            // total_det_input_size_mb += input_size_mb;
+            // total_det_output_size_mb += output_size_mb;
+            // total_det_images++;
 
-            auto inference_end = std::chrono::steady_clock::now();
+            // auto inference_end = std::chrono::steady_clock::now();
 
-            // Postprocessing
-            auto postprocess_start = std::chrono::steady_clock::now();
+            // // Postprocessing
+            // auto postprocess_start = std::chrono::steady_clock::now();
 
             int n2 = static_cast<int>(output_shape[2]);
             int n3 = static_cast<int>(output_shape[3]);
@@ -293,22 +293,22 @@ namespace PaddleOCR
             cv::Mat cbuf_map(n2, n3, CV_8UC1, (unsigned char *)cbuf.data());
             cv::Mat pred_map(n2, n3, CV_32F, (float *)pred.data());
 
-            auto threshold_start = std::chrono::steady_clock::now();
+            // auto threshold_start = std::chrono::steady_clock::now();
             const double threshold = this->det_db_thresh_ * 255;
             const double maxvalue = 255;
             cv::Mat bit_map;
             cv::threshold(cbuf_map, bit_map, threshold, maxvalue, cv::THRESH_BINARY);
-            auto threshold_end = std::chrono::steady_clock::now();
+            // auto threshold_end = std::chrono::steady_clock::now();
 
-            auto dilation_start = std::chrono::steady_clock::now();
+            // auto dilation_start = std::chrono::steady_clock::now();
             if (this->use_dilation_)
             {
                 cv::Mat dila_ele = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
                 cv::dilate(bit_map, bit_map, dila_ele);
             }
-            auto dilation_end = std::chrono::steady_clock::now();
+            // auto dilation_end = std::chrono::steady_clock::now();
 
-            auto boxes_from_bitmap_start = std::chrono::steady_clock::now();
+            // auto boxes_from_bitmap_start = std::chrono::steady_clock::now();
             if (device_ == "NPU")
             {
                 if (ratio_h != 1.0f || ratio_w != 1.0f)
@@ -334,50 +334,50 @@ namespace PaddleOCR
                 boxes = std::move(post_processor_.BoxesFromBitmap(
                     pred_map, bit_map, srcimg.cols, srcimg.rows));
             }
-            auto boxes_from_bitmap_end = std::chrono::steady_clock::now();
+            // auto boxes_from_bitmap_end = std::chrono::steady_clock::now();
 
-            auto filter_tag_start = std::chrono::steady_clock::now();
+            // auto filter_tag_start = std::chrono::steady_clock::now();
             post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, srcimg);
-            auto filter_tag_end = std::chrono::steady_clock::now();
+            // auto filter_tag_end = std::chrono::steady_clock::now();
 
-            auto postprocess_end = std::chrono::steady_clock::now();
+            // auto postprocess_end = std::chrono::steady_clock::now();
 
-            // Calculate detailed timing
-            std::chrono::duration<float> resize_diff = resize_end - resize_start;
-            std::chrono::duration<float> normalize_diff = normalize_end - normalize_start;
-            std::chrono::duration<float> permute_diff = permute_end - permute_start;
-            std::chrono::duration<float> inference_diff = inference_end - inference_start;
-            std::chrono::duration<float> threshold_diff = threshold_end - threshold_start;
-            std::chrono::duration<float> dilation_diff = dilation_end - dilation_start;
-            std::chrono::duration<float> boxes_from_bitmap_diff = boxes_from_bitmap_end - boxes_from_bitmap_start;
-            std::chrono::duration<float> filter_tag_diff = filter_tag_end - filter_tag_start;
+            // // Calculate detailed timing
+            // std::chrono::duration<float> resize_diff = resize_end - resize_start;
+            // std::chrono::duration<float> normalize_diff = normalize_end - normalize_start;
+            // std::chrono::duration<float> permute_diff = permute_end - permute_start;
+            // std::chrono::duration<float> inference_diff = inference_end - inference_start;
+            // std::chrono::duration<float> threshold_diff = threshold_end - threshold_start;
+            // std::chrono::duration<float> dilation_diff = dilation_end - dilation_start;
+            // std::chrono::duration<float> boxes_from_bitmap_diff = boxes_from_bitmap_end - boxes_from_bitmap_start;
+            // std::chrono::duration<float> filter_tag_diff = filter_tag_end - filter_tag_start;
 
-            // Store detailed timings (in milliseconds)
-            // [resize, normalize, permute, inference, threshold, dilation, boxes_from_bitmap, filter_tag]
-            times.resize(11);                                 // 8 detailed + 3 summary
-            times[0] = resize_diff.count() * 1000;            // Detailed: resize
-            times[1] = normalize_diff.count() * 1000;         // Detailed: normalize
-            times[2] = permute_diff.count() * 1000;           // Detailed: permute
-            times[3] = inference_diff.count() * 1000;         // Detailed: inference
-            times[4] = threshold_diff.count() * 1000;         // Detailed: threshold
-            times[5] = dilation_diff.count() * 1000;          // Detailed: dilation
-            times[6] = boxes_from_bitmap_diff.count() * 1000; // Detailed: boxes_from_bitmap
-            times[7] = filter_tag_diff.count() * 1000;        // Detailed: filter_tag
+            // // Store detailed timings (in milliseconds)
+            // // [resize, normalize, permute, inference, threshold, dilation, boxes_from_bitmap, filter_tag]
+            // times.resize(11);                                 // 8 detailed + 3 summary
+            // times[0] = resize_diff.count() * 1000;            // Detailed: resize
+            // times[1] = normalize_diff.count() * 1000;         // Detailed: normalize
+            // times[2] = permute_diff.count() * 1000;           // Detailed: permute
+            // times[3] = inference_diff.count() * 1000;         // Detailed: inference
+            // times[4] = threshold_diff.count() * 1000;         // Detailed: threshold
+            // times[5] = dilation_diff.count() * 1000;          // Detailed: dilation
+            // times[6] = boxes_from_bitmap_diff.count() * 1000; // Detailed: boxes_from_bitmap
+            // times[7] = filter_tag_diff.count() * 1000;        // Detailed: filter_tag
 
-            // Calculate summary timing (for backward compatibility)
-            std::chrono::duration<float> preprocess_diff = permute_end - preprocess_start;
-            std::chrono::duration<float> postprocess_diff = postprocess_end - inference_end;
+            // // Calculate summary timing (for backward compatibility)
+            // std::chrono::duration<float> preprocess_diff = permute_end - preprocess_start;
+            // std::chrono::duration<float> postprocess_diff = postprocess_end - inference_end;
 
-            times[8] = preprocess_diff.count() * 1000;   // Summary: preprocess
-            times[9] = inference_diff.count() * 1000;    // Summary: inference
-            times[10] = postprocess_diff.count() * 1000; // Summary: postprocess
+            // times[8] = preprocess_diff.count() * 1000;   // Summary: preprocess
+            // times[9] = inference_diff.count() * 1000;    // Summary: inference
+            // times[10] = postprocess_diff.count() * 1000; // Summary: postprocess
         }
         catch (const std::exception &e)
         {
             std::cerr << "[ERROR] Exception in DBDetectorOpenVINO::Run: " << e.what() << std::endl;
             // Ensure we have valid output even on exception
-            times.clear();
-            times.resize(11, 0.0); // 8 detailed + 3 summary
+            // times.clear();
+            // times.resize(11, 0.0); // 8 detailed + 3 summary
             // Exit to avoid further processing errors
             exit(1);
         }
@@ -385,8 +385,8 @@ namespace PaddleOCR
         {
             std::cerr << "[ERROR] Unknown exception in DBDetectorOpenVINO::Run" << std::endl;
             // Ensure we have valid output even on exception
-            times.clear();
-            times.resize(11, 0.0); // 8 detailed + 3 summary
+            // times.clear();
+            // times.resize(11, 0.0); // 8 detailed + 3 summary
             // Exit to avoid further processing errors
             exit(1);
         }
@@ -395,30 +395,30 @@ namespace PaddleOCR
     // Function to print final detection memory transfer statistics
     void DBDetectorOpenVINO::PrintFinalDetectionStats()
     {
-        if (total_det_images > 0)
-        {
-            printf("\n=== Detection Memory Transfer Final Statistics ===\n");
-            printf("Detection processed %d images\n", total_det_images);
-            printf("Detection Memory Transfer Timing (per image averages):\n");
-            printf("  Shape setup:     %.2f ms per image\n", total_det_shape_time / total_det_images);
-            printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n",
-                   total_det_cpu_to_gpu_time / total_det_images,
-                   (double)total_det_input_size_mb / total_det_images);
-            printf("  Pure inference:  %.2f ms per image\n", total_det_pure_inference_time / total_det_images);
-            printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n",
-                   total_det_gpu_to_cpu_time / total_det_images,
-                   (double)total_det_output_size_mb / total_det_images);
+        // if (total_det_images > 0)
+        // {
+        // printf("\n=== Detection Memory Transfer Final Statistics ===\n");
+        // printf("Detection processed %d images\n", total_det_images);
+        // printf("Detection Memory Transfer Timing (per image averages):\n");
+        // printf("  Shape setup:     %.2f ms per image\n", total_det_shape_time / total_det_images);
+        // printf("  CPU->GPU copy:   %.2f ms per image (%.1f MB avg)\n",
+        //        total_det_cpu_to_gpu_time / total_det_images,
+        //        (double)total_det_input_size_mb / total_det_images);
+        // printf("  Pure inference:  %.2f ms per image\n", total_det_pure_inference_time / total_det_images);
+        // printf("  GPU->CPU copy:   %.2f ms per image (%.1f MB avg)\n",
+        //        total_det_gpu_to_cpu_time / total_det_images,
+        //        (double)total_det_output_size_mb / total_det_images);
 
-            double avg_total_transfer = (total_det_cpu_to_gpu_time + total_det_gpu_to_cpu_time) / total_det_images;
-            double avg_total_time = (total_det_shape_time + total_det_cpu_to_gpu_time + total_det_pure_inference_time + total_det_gpu_to_cpu_time) / total_det_images;
-            double avg_pure_inference = total_det_pure_inference_time / total_det_images;
+        // double avg_total_transfer = (total_det_cpu_to_gpu_time + total_det_gpu_to_cpu_time) / total_det_images;
+        // double avg_total_time = (total_det_shape_time + total_det_cpu_to_gpu_time + total_det_pure_inference_time + total_det_gpu_to_cpu_time) / total_det_images;
+        // double avg_pure_inference = total_det_pure_inference_time / total_det_images;
 
-            printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n",
-                   avg_total_transfer, (avg_total_transfer / avg_total_time) * 100);
-            printf("  Memory transfer overhead: %.1f%% of pure inference time\n",
-                   (avg_total_transfer / avg_pure_inference) * 100);
-            printf("==================================================\n\n");
-        }
+        // printf("  Total transfer:  %.2f ms per image (%.1f%% of total inference)\n",
+        //        avg_total_transfer, (avg_total_transfer / avg_total_time) * 100);
+        // printf("  Memory transfer overhead: %.1f%% of pure inference time\n",
+        //        (avg_total_transfer / avg_pure_inference) * 100);
+        // printf("==================================================\n\n");
+        // }
     }
 
 } // namespace PaddleOCR
