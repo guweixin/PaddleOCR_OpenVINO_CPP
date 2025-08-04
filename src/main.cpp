@@ -246,13 +246,13 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
   // // Initialize random seed for random colors
   // srand(static_cast<unsigned int>(time(nullptr)));
   // ///////////////////////
-  auto start_time_imread = std::chrono::high_resolution_clock::now();
+  // auto start_time_imread = std::chrono::high_resolution_clock::now();
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
-  std::cout << "image_path:" << image_path << std::endl;
-  auto end_time_imread = std::chrono::high_resolution_clock::now();
-  double imread_time = std::chrono::duration<double, std::milli>(end_time_imread - start_time_imread).count();
-  std::cout << "  " << std::endl;
-  std::cout << "########### img_time: " << (imread_time) << " ms" << std::endl;
+  // std::cout << "image_path:" << image_path << std::endl;
+  // auto end_time_imread = std::chrono::high_resolution_clock::now();
+  // double imread_time = std::chrono::duration<double, std::milli>(end_time_imread - start_time_imread).count();
+  // std::cout << "  " << std::endl;
+  // std::cout << "########### img_time: " << (imread_time) << " ms" << std::endl;
 
   if (!img.data)
   {
@@ -427,7 +427,7 @@ void run_batch_processing_mode()
     std::string image_text = ocr_single_image(ocr, cv_all_img_names[i]);
     auto end_time = std::chrono::high_resolution_clock::now();
     double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
-    std::cout << "image inference_time: " << (inference_time) << " ms" << std::endl;
+    // std::cout << "image inference_time: " << (inference_time) << " ms" << std::endl;
     sum_inference_time += inference_time;
 
     // Measure memory (not included in inference time)
