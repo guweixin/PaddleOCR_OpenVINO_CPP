@@ -42,9 +42,6 @@ struct MemoryUsage
 
 static size_t initial_memory_mb = 0;
 
-// Auto-detected GPU usage flag based on inference_device
-bool auto_use_gpu = false;
-
 MemoryUsage getMemoryUsage()
 {
   MemoryUsage usage = {0, 0, initial_memory_mb};
@@ -114,17 +111,14 @@ void check_params()
       exit(1);
     }
 
-    // Check detection model file for OpenVINO
-    if (FLAGS_inference_framework == "ov")
+    // Check detection model file
+    std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
+    std::ifstream file(det_model_path);
+    if (!file.good())
     {
-      std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
-      std::ifstream file(det_model_path);
-      if (!file.good())
-      {
-        std::cout << "Error: Detection model file '" << det_model_path
-                  << "' not found" << std::endl;
-        exit(1);
-      }
+      std::cout << "Error: Detection model file '" << det_model_path
+                << "' not found" << std::endl;
+      exit(1);
     }
   }
   if (FLAGS_rec)
@@ -143,37 +137,35 @@ void check_params()
       exit(1);
     }
 
-    // Check recognition model file for OpenVINO
-    if (FLAGS_inference_framework == "ov")
+    // Check recognition model file
+    std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+
+    if (FLAGS_inference_device == "NPU")
     {
-      std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+      // For NPU, check if the directory exists and contains required model files
+      std::string model_small_path = rec_model_path + "/inference_480_bs1.xml";
+      std::string model_big_path = rec_model_path + "/inference_800_bs1.xml";
 
-      if (FLAGS_inference_device == "NPU")
+      std::ifstream file_small(model_small_path);
+      std::ifstream file_big(model_big_path);
+
+      if (!file_small.good() || !file_big.good())
       {
-        // For NPU, check if the directory exists and contains required model files
-        std::string model_small_path = rec_model_path + "/inference_640_bs1.xml";
-        std::string model_big_path = rec_model_path + "/inference_1280_bs1.xml";
 
-        std::ifstream file_small(model_small_path);
-        std::ifstream file_big(model_big_path);
-
-        if (!file_small.good() || !file_big.good())
-        {
-          std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
-          std::cout << "Required files: inference_640_bs1.xml, inference_1280_bs1.xml" << std::endl;
-          exit(1);
-        }
+        std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
+        std::cout << "Required files: inference_480_bs1.xml, inference_800_bs1.xml" << std::endl;
+        exit(1);
       }
-      else
+    }
+    else
+    {
+      // For CPU/GPU, check single model file
+      std::ifstream file(rec_model_path);
+      if (!file.good())
       {
-        // For CPU/GPU, check single model file
-        std::ifstream file(rec_model_path);
-        if (!file.good())
-        {
-          std::cout << "Error: Recognition model file '" << rec_model_path
-                    << "' not found" << std::endl;
-          exit(1);
-        }
+        std::cout << "Error: Recognition model file '" << rec_model_path
+                  << "' not found" << std::endl;
+        exit(1);
       }
     }
   }
@@ -185,25 +177,12 @@ void check_params()
     exit(1);
   }
 
-  // Check inference framework parameters
-  if (FLAGS_inference_framework != "paddle" && FLAGS_inference_framework != "ov")
+  // Check inference device
+  if (FLAGS_inference_device != "CPU" && FLAGS_inference_device != "GPU" && FLAGS_inference_device != "NPU")
   {
-    std::cout << "inference_framework should be 'paddle'(default) or 'ov'(OpenVINO). " << std::endl;
+    std::cout << "inference_device should be 'CPU', 'GPU', or 'NPU' for OpenVINO. " << std::endl;
     exit(1);
   }
-
-  // Check inference device parameters for OpenVINO
-  if (FLAGS_inference_framework == "ov")
-  {
-    if (FLAGS_inference_device != "CPU" && FLAGS_inference_device != "GPU" && FLAGS_inference_device != "NPU")
-    {
-      std::cout << "inference_device should be 'CPU', 'GPU', or 'NPU' for OpenVINO. " << std::endl;
-      exit(1);
-    }
-  }
-
-  // Auto-detect GPU usage based on inference_device parameter
-  auto_use_gpu = (FLAGS_inference_device == "GPU");
 
   // Check batch processing mode parameters (output is required)
   if (FLAGS_image_dir.empty())
@@ -219,34 +198,33 @@ void check_params()
 
   // Display inference framework information
   std::cout << "=== Inference Configuration ===" << std::endl;
-  std::cout << "Framework: " << FLAGS_inference_framework << std::endl;
-  std::cout << "GPU Usage: " << (auto_use_gpu ? "Enabled" : "Disabled") << " (auto-detected from device: " << FLAGS_inference_device << ")" << std::endl;
-  if (FLAGS_inference_framework == "ov")
+  std::cout << "Device: " << FLAGS_inference_device << std::endl;
+  if (FLAGS_det)
   {
-    std::cout << "Device: " << FLAGS_inference_device << std::endl;
-    if (FLAGS_det)
-    {
-      std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
-      std::cout << "Detection model: " << det_model_path << std::endl;
-    }
-    if (FLAGS_rec)
-    {
-      std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
-      std::cout << "Recognition model: " << rec_model_path << std::endl;
-    }
+    std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
+    std::cout << "Detection model: " << det_model_path << std::endl;
+  }
+  if (FLAGS_rec)
+  {
+    std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+    std::cout << "Recognition model: " << rec_model_path << std::endl;
   }
   std::cout << "===============================" << std::endl;
 }
 
 std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
 {
-  auto start_time_imread = std::chrono::high_resolution_clock::now();
+  // ///////////////////////
+  // // Initialize random seed for random colors
+  // srand(static_cast<unsigned int>(time(nullptr)));
+  // ///////////////////////
+  // auto start_time_imread = std::chrono::high_resolution_clock::now();
   cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
-  std::cout << "image_path:" << image_path << std::endl;
-  auto end_time_imread = std::chrono::high_resolution_clock::now();
-  double imread_time = std::chrono::duration<double, std::milli>(end_time_imread - start_time_imread).count();
-  std::cout << "  " << std::endl;
-  std::cout << "########### img_time: " << (imread_time) << " ms" << std::endl;
+  // std::cout << "image_path:" << image_path << std::endl;
+  // auto end_time_imread = std::chrono::high_resolution_clock::now();
+  // double imread_time = std::chrono::duration<double, std::milli>(end_time_imread - start_time_imread).count();
+  // std::cout << "  " << std::endl;
+  // std::cout << "########### img_time: " << (imread_time) << " ms" << std::endl;
 
   if (!img.data)
   {
@@ -256,12 +234,96 @@ std::string ocr_single_image(PPOCR &ocr, const std::string &image_path)
 
   std::vector<OCRPredictResult> ocr_results = ocr.ocr(img, FLAGS_det, FLAGS_rec);
 
+  // ///////////////////////
+  // // Create directories if they don't exist
+  // std::string crop_dir = "crop_img";
+  // std::string show_dir = "show_img";
+  // if (!Utility::PathExists(crop_dir))
+  // {
+  //   Utility::CreateDir(crop_dir);
+  // }
+  // if (!Utility::PathExists(show_dir))
+  // {
+  //   Utility::CreateDir(show_dir);
+  // }
+
+  // // Extract base name from image path for naming files
+  // std::string base_name = image_path.substr(image_path.find_last_of("/\\") + 1);
+  // base_name = base_name.substr(0, base_name.find_last_of('.'));
+
+  // // Create a copy of the original image for drawing boxes
+  // cv::Mat show_img = img.clone();
+  // ///////////////////////
   std::string result_text = "";
   for (const auto &res : ocr_results)
+  // for (size_t i = 0; i < ocr_results.size(); ++i)
   {
+    // ///////////////////////
+    // const auto &res = ocr_results[i];
+    // ///////////////////////
     result_text += res.text + "\n";
-  }
+    // ///////////////////////
+    // // Process text box (these are the final filtered results from OCR)
+    // if (res.box.size() == 4 && res.box[0].size() == 2)
+    // {
+    //   // Draw polygon for the text box on show image with random color
+    //   std::vector<cv::Point> points;
+    //   for (const auto &point : res.box)
+    //   {
+    //     points.emplace_back(point[0], point[1]);
+    //   }
 
+    //   // Generate random color for each text box
+    //   cv::Scalar random_color(rand() % 256, rand() % 256, rand() % 256);
+
+    //   // Draw the text box with random color (no text displayed)
+    //   cv::polylines(show_img, std::vector<std::vector<cv::Point>>{points}, true, random_color, 3);
+
+    //   // Save cropped text box image (final filtered results)
+    //   // Get bounding box coordinates
+    //   int min_x = img.cols, min_y = img.rows, max_x = 0, max_y = 0;
+    //   for (const auto &point : res.box)
+    //   {
+    //     if (point[0] < min_x)
+    //       min_x = point[0];
+    //     if (point[0] > max_x)
+    //       max_x = point[0];
+    //     if (point[1] < min_y)
+    //       min_y = point[1];
+    //     if (point[1] > max_y)
+    //       max_y = point[1];
+    //   }
+
+    //   // Ensure coordinates are within image bounds
+    //   if (min_x < 0)
+    //     min_x = 0;
+    //   if (min_y < 0)
+    //     min_y = 0;
+    //   if (max_x >= img.cols)
+    //     max_x = img.cols - 1;
+    //   if (max_y >= img.rows)
+    //     max_y = img.rows - 1;
+
+    //   if (max_x > min_x && max_y > min_y)
+    //   {
+    //     // Crop the image
+    //     cv::Rect crop_rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1);
+    //     cv::Mat cropped_img = img(crop_rect);
+
+    //     // Save cropped image
+    //     std::string crop_filename = crop_dir + "/" + base_name + "_crop_" + std::to_string(i) + ".jpg";
+    //     cv::imwrite(crop_filename, cropped_img);
+    //     std::cout << "Saved cropped text box: " << crop_filename << " (text: " << res.text << ")" << std::endl;
+    //   }
+    // }
+    // ///////////////////////
+  }
+  // ///////////////////////
+  // // Save the image with drawn text boxes
+  // std::string show_filename = show_dir + "/" + base_name + "_boxes.jpg";
+  // cv::imwrite(show_filename, show_img);
+  // std::cout << "Saved image with text boxes: " << show_filename << " (found " << ocr_results.size() << " text boxes)" << std::endl;
+  // ///////////////////////
   return result_text;
 }
 
@@ -337,7 +399,7 @@ void run_batch_processing_mode()
     std::string image_text = ocr_single_image(ocr, cv_all_img_names[i]);
     auto end_time = std::chrono::high_resolution_clock::now();
     double inference_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
-    std::cout << "image inference_time: " << (inference_time) << " ms" << std::endl;
+    // std::cout << "image inference_time: " << (inference_time) << " ms" << std::endl;
     sum_inference_time += inference_time;
 
     // Measure memory (not included in inference time)
@@ -377,7 +439,8 @@ void run_batch_processing_mode()
 int main(int argc, char **argv)
 {
   // Parsing command-line
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  parse_args(argc, argv);
+  // google::ParseCommandLineFlags(&argc, &argv, true);
   check_params();
 
   // Use batch processing mode as default

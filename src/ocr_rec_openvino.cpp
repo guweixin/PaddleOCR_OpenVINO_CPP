@@ -39,9 +39,10 @@ namespace PaddleOCR
                 // CPU-specific configurations
                 config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
             }
-            else if (device_ == "GPU")
+            else if (device_ == "GPU" || device_ == "NPU")
             {
                 config["INFERENCE_PRECISION_HINT"] = "f16";
+                config["CACHE_DIR"] = "./openvino_cache";
             }
 
             if (device_ == "NPU")
@@ -55,8 +56,9 @@ namespace PaddleOCR
                 {
                     dir += "/";
                 }
-                model_small_path = dir + "inference_640_bs1.xml";
-                model_big_path = dir + "inference_1280_bs1.xml";
+
+                model_small_path = dir + "inference_480_bs1.xml";
+                model_big_path = dir + "inference_800_bs1.xml";
 
                 // Load small model
                 std::ifstream file_small(model_small_path);
@@ -226,8 +228,8 @@ namespace PaddleOCR
         int big_model_width = static_cast<int>(big_input_shape[big_input_shape.size() - 1]);
         int target_h = static_cast<int>(big_input_shape[big_input_shape.size() - 2]);
 
-        std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
-        std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
+        // std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
+        // std::cout << "[NPU] Big model input width: " << big_model_width << std::endl;
         auto sort_start = std::chrono::steady_clock::now();
         // Calculate aspect ratio and sort indices for optimization
         std::vector<float> width_list;
@@ -325,6 +327,9 @@ namespace PaddleOCR
                 // Copy scaled image to the canvas
                 cv::Rect roi(start_x, start_y, new_w, new_h);
                 scaled_img.copyTo(resize_img(roi));
+
+                // // ! just resize
+                // cv::resize(img_list[indices[idx]], resize_img, cv::Size(target_w, target_h));
 
                 auto normalize_start = std::chrono::steady_clock::now();
                 this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);

@@ -1,55 +1,187 @@
-// Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-#include <gflags/gflags.h>
+#include <include/args.h>
+#include <iostream>
+#include <string>
+#include <cstring>
 
 // common args
-DEFINE_bool(use_tensorrt, false, "Whether use tensorrt.");
-DEFINE_int32(gpu_id, 0, "Device id of GPU to execute.");
-DEFINE_int32(gpu_mem, 4000, "GPU memory size (MB) to use.");
-DEFINE_int32(cpu_threads, 10, "Num of threads with CPU.");
-DEFINE_bool(enable_mkldnn, false, "Whether use mkldnn with CPU.");
-DEFINE_string(precision, "fp32", "Precision be one of fp32/fp16/int8");
-DEFINE_string(output, "./output/", "Save results to output directory.");
-DEFINE_string(image_dir, "", "Dir of input image.");
-DEFINE_string(
-    type, "ocr",
-    "Perform ocr or structure, the value is selected in ['ocr','structure'].");
+
+int FLAGS_cpu_threads = 10;
+std::string FLAGS_precision = "fp32";
+std::string FLAGS_output = "./output/";
+std::string FLAGS_image_dir = "";
+
 // OpenVINO related
-DEFINE_string(inference_framework, "paddle", "Inference framework: 'paddle' or 'ov' (OpenVINO)");
-DEFINE_string(inference_device, "CPU", "Inference device for OpenVINO: 'CPU', 'GPU', or 'NPU'");
+std::string FLAGS_inference_device = "CPU";
+
 // detection related
-DEFINE_string(det_model_dir, "", "Path of det inference model.");
-DEFINE_string(limit_type, "max", "limit_type of input image.");
-DEFINE_int32(limit_side_len, 960, "limit_side_len of input image.");
-DEFINE_double(det_db_thresh, 0.3, "Threshold of det_db_thresh.");
-DEFINE_double(det_db_box_thresh, 0.6, "Threshold of det_db_box_thresh.");
-DEFINE_double(det_db_unclip_ratio, 1.5, "Threshold of det_db_unclip_ratio.");
-DEFINE_bool(use_dilation, false, "Whether use the dilation on output map.");
-DEFINE_string(det_db_score_mode, "slow", "Whether use polygon score.");
-DEFINE_bool(visualize, true, "Whether show the detection results.");
+std::string FLAGS_det_model_dir = "";
+std::string FLAGS_limit_type = "max";
+int FLAGS_limit_side_len = 960;
+double FLAGS_det_db_thresh = 0.3;
+double FLAGS_det_db_box_thresh = 0.6;
+double FLAGS_det_db_unclip_ratio = 1.5;
+bool FLAGS_use_dilation = false;
+std::string FLAGS_det_db_score_mode = "slow";
+bool FLAGS_visualize = true;
+
 // recognition related
-DEFINE_string(rec_model_dir, "", "Path of rec inference model.");
-DEFINE_int32(rec_batch_num, 6, "rec_batch_num.");
-DEFINE_string(rec_char_dict_path, "../../utils/ppocr_keys_v1.txt",
-              "Path of dictionary.");
-DEFINE_int32(rec_img_h, 48, "rec image height");
-DEFINE_int32(rec_img_w, 320, "rec image width");
+std::string FLAGS_rec_model_dir = "";
+int FLAGS_rec_batch_num = 6;
+std::string FLAGS_rec_char_dict_path = "../../utils/ppocr_keys_v1.txt";
+int FLAGS_rec_img_h = 48;
+int FLAGS_rec_img_w = 320;
 
 // Character recognition configuration
-DEFINE_bool(use_space_char, true, "Whether to add space character to the recognition vocabulary for space prediction.");
+bool FLAGS_use_space_char = true;
 
 // ocr forward related
-DEFINE_bool(det, true, "Whether use det in forward.");
-DEFINE_bool(rec, true, "Whether use rec in forward.");
+bool FLAGS_det = true;
+bool FLAGS_rec = true;
+
+void print_help()
+{
+    std::cout << "Usage: program [options]\n"
+              << "Options:\n"
+              << "Common args:\n"
+              << "  --cpu_threads <num>        Number of CPU threads (default: 10)\n"
+              << "  --precision <type>         Precision: fp32/fp16/int8 (default: fp32)\n"
+              << "  --output <path>            Output directory (default: ./output/)\n"
+              << "  --image_dir <path>         Directory of input images\n"
+              << "\n"
+              << "OpenVINO related:\n"
+              << "  --inference_device <dev>   OpenVINO device: CPU/GPU/NPU (default: CPU)\n"
+              << "\n"
+              << "Detection related:\n"
+              << "  --det_model_dir <path>     Path of detection inference model\n"
+              << "  --limit_type <type>        Limit type of input image (default: max)\n"
+              << "  --limit_side_len <len>     Limit side length of input image (default: 960)\n"
+              << "  --det_db_thresh <val>      DB threshold (default: 0.3)\n"
+              << "  --det_db_box_thresh <val>  DB box threshold (default: 0.6)\n"
+              << "  --det_db_unclip_ratio <val> DB unclip ratio (default: 1.5)\n"
+              << "  --use_dilation             Use dilation on output map\n"
+              << "  --det_db_score_mode <mode> Polygon score mode (default: slow)\n"
+              << "  --visualize                Show detection results (default: true)\n"
+              << "\n"
+              << "Recognition related:\n"
+              << "  --rec_model_dir <path>     Path of recognition inference model\n"
+              << "  --rec_batch_num <num>      Recognition batch number (default: 6)\n"
+              << "  --rec_char_dict_path <path> Path of character dictionary\n"
+              << "  --rec_img_h <height>       Recognition image height (default: 48)\n"
+              << "  --rec_img_w <width>        Recognition image width (default: 320)\n"
+              << "  --use_space_char           Add space character to vocabulary\n"
+              << "\n"
+              << "OCR forward related:\n"
+              << "  --det                      Use detection in forward (default: true)\n"
+              << "  --rec                      Use recognition in forward (default: true)\n"
+              << "\n"
+              << "  --help, -h                 Show this help message\n";
+}
+
+bool parse_args(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; i++)
+    {
+        std::string arg = argv[i];
+
+        if (arg == "--help" || arg == "-h")
+        {
+            print_help();
+            return false;
+        }
+        else if (arg.find("--det_model_dir=") == 0)
+        {
+            FLAGS_det_model_dir = arg.substr(strlen("--det_model_dir="));
+        }
+        else if (arg.find("--rec_model_dir=") == 0)
+        {
+            FLAGS_rec_model_dir = arg.substr(strlen("--rec_model_dir="));
+        }
+        else if (arg.find("--image_dir=") == 0)
+        {
+            FLAGS_image_dir = arg.substr(strlen("--image_dir="));
+        }
+        else if (arg.find("--output=") == 0)
+        {
+            FLAGS_output = arg.substr(strlen("--output="));
+        }
+        else if (arg.find("--inference_device=") == 0)
+        {
+            FLAGS_inference_device = arg.substr(strlen("--inference_device="));
+        }
+        else if (arg.find("--cpu_threads=") == 0)
+        {
+            FLAGS_cpu_threads = std::stoi(arg.substr(strlen("--cpu_threads=")));
+        }
+        else if (arg.find("--limit_side_len=") == 0)
+        {
+            FLAGS_limit_side_len = std::stoi(arg.substr(strlen("--limit_side_len=")));
+        }
+        else if (arg.find("--det_db_thresh=") == 0)
+        {
+            FLAGS_det_db_thresh = std::stod(arg.substr(strlen("--det_db_thresh=")));
+        }
+        else if (arg.find("--det_db_box_thresh=") == 0)
+        {
+            FLAGS_det_db_box_thresh = std::stod(arg.substr(strlen("--det_db_box_thresh=")));
+        }
+        else if (arg.find("--det_db_unclip_ratio=") == 0)
+        {
+            FLAGS_det_db_unclip_ratio = std::stod(arg.substr(strlen("--det_db_unclip_ratio=")));
+        }
+        else if (arg.find("--rec_batch_num=") == 0)
+        {
+            FLAGS_rec_batch_num = std::stoi(arg.substr(strlen("--rec_batch_num=")));
+        }
+        else if (arg.find("--rec_char_dict_path=") == 0)
+        {
+            FLAGS_rec_char_dict_path = arg.substr(strlen("--rec_char_dict_path="));
+        }
+        else if (arg.find("--rec_img_h=") == 0)
+        {
+            FLAGS_rec_img_h = std::stoi(arg.substr(strlen("--rec_img_h=")));
+        }
+        else if (arg.find("--rec_img_w=") == 0)
+        {
+            FLAGS_rec_img_w = std::stoi(arg.substr(strlen("--rec_img_w=")));
+        }
+        else if (arg.find("--precision=") == 0)
+        {
+            FLAGS_precision = arg.substr(strlen("--precision="));
+        }
+        else if (arg.find("--limit_type=") == 0)
+        {
+            FLAGS_limit_type = arg.substr(strlen("--limit_type="));
+        }
+        else if (arg.find("--det_db_score_mode=") == 0)
+        {
+            FLAGS_det_db_score_mode = arg.substr(strlen("--det_db_score_mode="));
+        }
+        else if (arg == "--use_dilation")
+        {
+            FLAGS_use_dilation = true;
+        }
+        else if (arg == "--visualize")
+        {
+            FLAGS_visualize = true;
+        }
+        else if (arg == "--use_space_char")
+        {
+            FLAGS_use_space_char = true;
+        }
+        else if (arg == "--det")
+        {
+            FLAGS_det = true;
+        }
+        else if (arg == "--rec")
+        {
+            FLAGS_rec = true;
+        }
+        else
+        {
+            std::cerr << "Unknown argument: " << arg << std::endl;
+            print_help();
+            return false;
+        }
+    }
+    return true;
+}
