@@ -49,13 +49,8 @@ namespace PaddleOCR
     {
     public:
         static std::unique_ptr<DetectorInterface> CreateDetector(
-            const std::string &framework,
             const std::string &model_dir,
-            const bool &use_gpu,
-            const int &gpu_id,
-            const int &gpu_mem,
             const int &cpu_math_library_num_threads,
-            const bool &use_mkldnn,
             const std::string &limit_type,
             const int &limit_side_len,
             const double &det_db_thresh,
@@ -63,7 +58,6 @@ namespace PaddleOCR
             const double &det_db_unclip_ratio,
             const std::string &det_db_score_mode,
             const bool &use_dilation,
-            const bool &use_tensorrt,
             const std::string &precision,
             const std::string &device = "CPU");
     };
@@ -73,15 +67,9 @@ namespace PaddleOCR
     {
     public:
         static std::unique_ptr<RecognizerInterface> CreateRecognizer(
-            const std::string &framework,
             const std::string &model_dir,
-            const bool &use_gpu,
-            const int &gpu_id,
-            const int &gpu_mem,
             const int &cpu_math_library_num_threads,
-            const bool &use_mkldnn,
             const std::string &label_path,
-            const bool &use_tensorrt,
             const std::string &precision,
             const int &rec_batch_num,
             const int &rec_img_h,

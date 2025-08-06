@@ -42,9 +42,6 @@ struct MemoryUsage
 
 static size_t initial_memory_mb = 0;
 
-// Auto-detected GPU usage flag based on inference_device
-bool auto_use_gpu = false;
-
 MemoryUsage getMemoryUsage()
 {
   MemoryUsage usage = {0, 0, initial_memory_mb};
@@ -114,17 +111,14 @@ void check_params()
       exit(1);
     }
 
-    // Check detection model file for OpenVINO
-    if (FLAGS_inference_framework == "ov")
+    // Check detection model file
+    std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
+    std::ifstream file(det_model_path);
+    if (!file.good())
     {
-      std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
-      std::ifstream file(det_model_path);
-      if (!file.good())
-      {
-        std::cout << "Error: Detection model file '" << det_model_path
-                  << "' not found" << std::endl;
-        exit(1);
-      }
+      std::cout << "Error: Detection model file '" << det_model_path
+                << "' not found" << std::endl;
+      exit(1);
     }
   }
   if (FLAGS_rec)
@@ -143,37 +137,34 @@ void check_params()
       exit(1);
     }
 
-    // Check recognition model file for OpenVINO
-    if (FLAGS_inference_framework == "ov")
+    // Check recognition model file
+    std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+
+    if (FLAGS_inference_device == "NPU")
     {
-      std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+      // For NPU, check if the directory exists and contains required model files
+      std::string model_small_path = rec_model_path + "/inference_480_bs1.xml";
+      std::string model_big_path = rec_model_path + "/inference_800_bs1.xml";
 
-      if (FLAGS_inference_device == "NPU")
+      std::ifstream file_small(model_small_path);
+      std::ifstream file_big(model_big_path);
+
+      if (!file_small.good() || !file_big.good())
       {
-        // For NPU, check if the directory exists and contains required model files
-        std::string model_small_path = rec_model_path + "/inference_480_bs1.xml";
-        std::string model_big_path = rec_model_path + "/inference_800_bs1.xml";
-
-        std::ifstream file_small(model_small_path);
-        std::ifstream file_big(model_big_path);
-
-        if (!file_small.good() || !file_big.good())
-        {
-          std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
-          std::cout << "Required files: inference_480_bs1.xml, inference_800_bs1.xml" << std::endl;
-          exit(1);
-        }
+        std::cout << "Error: NPU recognition model files not found in '" << rec_model_path << "'" << std::endl;
+        std::cout << "Required files: inference_480_bs1.xml, inference_800_bs1.xml" << std::endl;
+        exit(1);
       }
-      else
+    }
+    else
+    {
+      // For CPU/GPU, check single model file
+      std::ifstream file(rec_model_path);
+      if (!file.good())
       {
-        // For CPU/GPU, check single model file
-        std::ifstream file(rec_model_path);
-        if (!file.good())
-        {
-          std::cout << "Error: Recognition model file '" << rec_model_path
-                    << "' not found" << std::endl;
-          exit(1);
-        }
+        std::cout << "Error: Recognition model file '" << rec_model_path
+                  << "' not found" << std::endl;
+        exit(1);
       }
     }
   }
@@ -185,25 +176,12 @@ void check_params()
     exit(1);
   }
 
-  // Check inference framework parameters
-  if (FLAGS_inference_framework != "paddle" && FLAGS_inference_framework != "ov")
+  // Check inference device
+  if (FLAGS_inference_device != "CPU" && FLAGS_inference_device != "GPU" && FLAGS_inference_device != "NPU")
   {
-    std::cout << "inference_framework should be 'paddle'(default) or 'ov'(OpenVINO). " << std::endl;
+    std::cout << "inference_device should be 'CPU', 'GPU', or 'NPU' for OpenVINO. " << std::endl;
     exit(1);
   }
-
-  // Check inference device parameters for OpenVINO
-  if (FLAGS_inference_framework == "ov")
-  {
-    if (FLAGS_inference_device != "CPU" && FLAGS_inference_device != "GPU" && FLAGS_inference_device != "NPU")
-    {
-      std::cout << "inference_device should be 'CPU', 'GPU', or 'NPU' for OpenVINO. " << std::endl;
-      exit(1);
-    }
-  }
-
-  // Auto-detect GPU usage based on inference_device parameter
-  auto_use_gpu = (FLAGS_inference_device == "GPU");
 
   // Check batch processing mode parameters (output is required)
   if (FLAGS_image_dir.empty())
@@ -219,21 +197,16 @@ void check_params()
 
   // Display inference framework information
   std::cout << "=== Inference Configuration ===" << std::endl;
-  std::cout << "Framework: " << FLAGS_inference_framework << std::endl;
-  std::cout << "GPU Usage: " << (auto_use_gpu ? "Enabled" : "Disabled") << " (auto-detected from device: " << FLAGS_inference_device << ")" << std::endl;
-  if (FLAGS_inference_framework == "ov")
+  std::cout << "Device: " << FLAGS_inference_device << std::endl;
+  if (FLAGS_det)
   {
-    std::cout << "Device: " << FLAGS_inference_device << std::endl;
-    if (FLAGS_det)
-    {
-      std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
-      std::cout << "Detection model: " << det_model_path << std::endl;
-    }
-    if (FLAGS_rec)
-    {
-      std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
-      std::cout << "Recognition model: " << rec_model_path << std::endl;
-    }
+    std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
+    std::cout << "Detection model: " << det_model_path << std::endl;
+  }
+  if (FLAGS_rec)
+  {
+    std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
+    std::cout << "Recognition model: " << rec_model_path << std::endl;
   }
   std::cout << "===============================" << std::endl;
 }
@@ -465,7 +438,8 @@ void run_batch_processing_mode()
 int main(int argc, char **argv)
 {
   // Parsing command-line
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  parse_args(argc, argv);
+  // google::ParseCommandLineFlags(&argc, &argv, true);
   check_params();
 
   // Use batch processing mode as default

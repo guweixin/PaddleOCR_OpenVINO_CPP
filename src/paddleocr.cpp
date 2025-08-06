@@ -13,13 +13,11 @@
 // limitations under the License.
 
 #include <include/args.h>
-#include <include/ocr_det.h>
-#include <include/ocr_rec.h>
 #include <include/paddleocr.h>
 #include <include/ocr_interface.h>
 #include <include/ocr_det_openvino.h>
 
-#include <auto_log/autolog.h>
+// #include <auto_log/autolog.h>
 #include <numeric>
 #include <iomanip>
 
@@ -32,47 +30,38 @@ namespace PaddleOCR
   // Utility function to get the correct model path for different frameworks
   std::string getModelPath(const std::string &model_dir, const std::string &model_type)
   {
-    if (FLAGS_inference_framework == "ov")
+    std::string filename;
+    if (FLAGS_inference_device == "NPU")
     {
-      // OpenVINO framework
-      std::string filename;
-      if (FLAGS_inference_device == "NPU")
+      if (model_type == "det")
       {
-        if (model_type == "det")
-        {
-          filename = "inference_960.xml";
-        }
-        else if (model_type == "rec")
-        {
-          // For NPU recognition, return directory path to allow dual-model loading
-          return model_dir;
-        }
-        else
-        {
-          filename = "inference.xml"; // Default for other models
-        }
+        filename = "inference_960.xml";
       }
-      else if (FLAGS_inference_device == "CPU" || FLAGS_inference_device == "GPU")
+      else if (model_type == "rec")
       {
-        filename = "inference.xml";
+        // For NPU recognition, return directory path to allow dual-model loading
+        return model_dir;
       }
+      else
+      {
+        filename = "inference.xml"; // Default for other models
+      }
+    }
+    else if (FLAGS_inference_device == "CPU" || FLAGS_inference_device == "GPU")
+    {
+      filename = "inference.xml";
+    }
 
-      // Handle path separator properly for different OS
-      std::string separator = "/";
+    // Handle path separator properly for different OS
+    std::string separator = "/";
 #ifdef _WIN32
-      // Check if model_dir uses Windows-style paths
-      if (model_dir.find('\\') != std::string::npos)
-      {
-        separator = "\\";
-      }
-#endif
-      return model_dir + separator + filename;
-    }
-    else
+    // Check if model_dir uses Windows-style paths
+    if (model_dir.find('\\') != std::string::npos)
     {
-      // Paddle framework uses the directory path
-      return model_dir;
+      separator = "\\";
     }
+#endif
+    return model_dir + separator + filename;
   }
 
   struct PPOCR::PPOCR_PRIVATE
@@ -87,20 +76,15 @@ namespace PaddleOCR
     {
       std::string det_model_path = getModelPath(FLAGS_det_model_dir, "det");
       this->pri_->detector_ = DetectorFactory::CreateDetector(
-          FLAGS_inference_framework, det_model_path, auto_use_gpu, FLAGS_gpu_id, FLAGS_gpu_mem,
-          FLAGS_cpu_threads, FLAGS_enable_mkldnn, FLAGS_limit_type,
-          FLAGS_limit_side_len, FLAGS_det_db_thresh, FLAGS_det_db_box_thresh,
+          det_model_path, FLAGS_cpu_threads, FLAGS_limit_type, FLAGS_limit_side_len, FLAGS_det_db_thresh, FLAGS_det_db_box_thresh,
           FLAGS_det_db_unclip_ratio, FLAGS_det_db_score_mode, FLAGS_use_dilation,
-          FLAGS_use_tensorrt, FLAGS_precision, FLAGS_inference_device);
+          FLAGS_precision, FLAGS_inference_device);
     }
-
     if (FLAGS_rec)
     {
       std::string rec_model_path = getModelPath(FLAGS_rec_model_dir, "rec");
       this->pri_->recognizer_ = RecognizerFactory::CreateRecognizer(
-          FLAGS_inference_framework, rec_model_path, auto_use_gpu, FLAGS_gpu_id, FLAGS_gpu_mem,
-          FLAGS_cpu_threads, FLAGS_enable_mkldnn, FLAGS_rec_char_dict_path,
-          FLAGS_use_tensorrt, FLAGS_precision, FLAGS_rec_batch_num,
+          rec_model_path, FLAGS_cpu_threads, FLAGS_rec_char_dict_path, FLAGS_precision, FLAGS_rec_batch_num,
           FLAGS_rec_img_h, FLAGS_rec_img_w, FLAGS_inference_device);
     }
   }
