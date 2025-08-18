@@ -36,6 +36,8 @@ model/
 |   |--inference_480_bs1.bin 
 |   |--inference_800_bs1.xml
 |   |--inference_800_bs1.bin 
+|   |--inference_1280_bs1.xml
+|   |--inference_1280_bs1.bin 
 ```
 
 <a name="12"></a>

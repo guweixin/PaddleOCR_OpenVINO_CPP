@@ -73,8 +73,10 @@ namespace PaddleOCR
                                  std::vector<double> &times) noexcept;
         ov::Core core_;
         ov::CompiledModel compiled_model_small_;
+        ov::CompiledModel compiled_model_medium_;
         ov::CompiledModel compiled_model_big_;
         ov::InferRequest infer_request_small_;
+        ov::InferRequest infer_request_medium_;
         ov::InferRequest infer_request_big_;
 
         std::string device_;
