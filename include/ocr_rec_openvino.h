@@ -72,12 +72,18 @@ namespace PaddleOCR
                                  std::vector<float> &rec_text_scores,
                                  std::vector<double> &times) noexcept;
         ov::Core core_;
+        ov::CompiledModel compiled_model_;
+        ov::CompiledModel compiled_model_tiny_;
         ov::CompiledModel compiled_model_small_;
         ov::CompiledModel compiled_model_medium_;
         ov::CompiledModel compiled_model_big_;
+        ov::CompiledModel compiled_model_large_;
+        ov::InferRequest infer_request_;
+        ov::InferRequest infer_request_tiny_;
         ov::InferRequest infer_request_small_;
         ov::InferRequest infer_request_medium_;
         ov::InferRequest infer_request_big_;
+        ov::InferRequest infer_request_large_;
 
         std::string device_;
         int rec_batch_num_;

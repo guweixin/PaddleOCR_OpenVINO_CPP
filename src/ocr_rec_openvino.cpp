@@ -48,7 +48,7 @@ namespace PaddleOCR
             if (device_ == "NPU")
             {
                 // NPU: Load dual models
-                std::string model_small_path, model_medium_path, model_big_path;
+                std::string model_tiny_path, model_small_path, model_medium_path, model_big_path, model_large_path;
 
                 // model_dir is a directory path, ensure it ends with a path separator
                 std::string dir = model_dir;
@@ -56,9 +56,20 @@ namespace PaddleOCR
                 {
                     dir += "/";
                 }
+                model_tiny_path = dir + "inference_240_bs1.xml";
                 model_small_path = dir + "inference_480_bs1.xml";
                 model_medium_path = dir + "inference_800_bs1.xml";
                 model_big_path = dir + "inference_1280_bs1.xml";
+                model_large_path = dir + "inference_1600_bs1.xml";
+
+                // Load tiny model
+                std::ifstream file_tiny(model_tiny_path);
+                if (!file_tiny.good())
+                {
+                    std::cerr << "[ERROR] tiny model file not found: " << model_tiny_path << std::endl;
+                    exit(1);
+                }
+                file_tiny.close();
 
                 // Load small model
                 std::ifstream file_small(model_small_path);
@@ -87,25 +98,42 @@ namespace PaddleOCR
                 }
                 file_big.close();
 
-                // Load both models
+                // Load large model
+                std::ifstream file_large(model_large_path);
+                if (!file_large.good())
+                {
+                    std::cerr << "[ERROR] large model file not found: " << model_large_path << std::endl;
+                    exit(1);
+                }
+                file_large.close();
+
+                // Load all models
+                auto model_tiny = core_.read_model(model_tiny_path);
                 auto model_small = core_.read_model(model_small_path);
                 auto model_medium = core_.read_model(model_medium_path);
                 auto model_big = core_.read_model(model_big_path);
-                std::cout << "[OpenVINO] Both NPU recognition model files loaded successfully" << std::endl;
+                auto model_large = core_.read_model(model_large_path);
+                std::cout << "[OpenVINO] all NPU recognition model files loaded successfully" << std::endl;
 
-                // Compile both models for NPU
+                // Compile all models for NPU
+                compiled_model_tiny_ = core_.compile_model(model_tiny, device_, config);
+                std::cout << "[OpenVINO] model_tiny successfully" << std::endl;
                 compiled_model_small_ = core_.compile_model(model_small, device_, config);
                 std::cout << "[OpenVINO] model_small successfully" << std::endl;
                 compiled_model_medium_ = core_.compile_model(model_medium, device_, config);
                 std::cout << "[OpenVINO] model_medium successfully" << std::endl;
                 compiled_model_big_ = core_.compile_model(model_big, device_, config);
                 std::cout << "[OpenVINO] model_big successfully" << std::endl;
+                compiled_model_large_ = core_.compile_model(model_large, device_, config);
+                std::cout << "[OpenVINO] model_large successfully" << std::endl;    
                 // Create inference requests
+                infer_request_tiny_ = compiled_model_tiny_.create_infer_request();
                 infer_request_small_ = compiled_model_small_.create_infer_request();
                 infer_request_medium_ = compiled_model_medium_.create_infer_request();
                 infer_request_big_ = compiled_model_big_.create_infer_request();
+                infer_request_large_ = compiled_model_large_.create_infer_request();
 
-                std::cout << "[OpenVINO] Both NPU recognition models compiled successfully" << std::endl;
+                std::cout << "[OpenVINO] all NPU recognition models compiled successfully" << std::endl;
             }
             else
             {
@@ -141,10 +169,10 @@ namespace PaddleOCR
                 std::cout << "[OpenVINO] " << device_ << " recognition model file loaded successfully" << std::endl;
 
                 // Compile model for CPU/GPU (use small slot for single model)
-                compiled_model_small_ = core_.compile_model(model, device_, config);
+                compiled_model_ = core_.compile_model(model, device_, config);
 
                 // Create inference request
-                infer_request_small_ = compiled_model_small_.create_infer_request();
+                infer_request_ = compiled_model_.create_infer_request();
 
                 std::cout << "[OpenVINO] " << device_ << " recognition model loaded successfully" << std::endl;
             }
@@ -235,13 +263,19 @@ namespace PaddleOCR
         temp_rec_text_scores.reserve(img_num);
 
         // Get input dimensions from both models
+        auto tiny_input_shape = compiled_model_tiny_.input().get_shape();
         auto small_input_shape = compiled_model_small_.input().get_shape();
         auto medium_input_shape = compiled_model_medium_.input().get_shape();
         auto big_input_shape = compiled_model_big_.input().get_shape();
+        auto large_input_shape = compiled_model_large_.input().get_shape();
+        int tiny_model_width = static_cast<int>(tiny_input_shape[tiny_input_shape.size() - 1]);
         int small_model_width = static_cast<int>(small_input_shape[small_input_shape.size() - 1]);
         int medium_model_width = static_cast<int>(medium_input_shape[medium_input_shape.size() - 1]);
         int big_model_width = static_cast<int>(big_input_shape[big_input_shape.size() - 1]);
-        int target_h = static_cast<int>(big_input_shape[big_input_shape.size() - 2]);
+        int large_model_width = static_cast<int>(large_input_shape[large_input_shape.size() - 1]);
+        // Get target height from the last model (large)
+        // This is used for all models since they share the same height
+        int target_h = static_cast<int>(large_input_shape[large_input_shape.size() - 2]);
 
         // std::cout << "[NPU] Small model input width: " << small_model_width << std::endl;
         // std::cout << "[NPU] Medium model input width: " << medium_model_width << std::endl;
@@ -273,7 +307,7 @@ namespace PaddleOCR
             // std::cout << "[NPU] Model input height: " << target_h << std::endl;
             // Determine which model to use based on aspect ratio
             int model_type = 0; // 0 for small; 1 for medium; 2 for big
-            int target_w = small_model_width;
+            int target_w = tiny_model_width; // Default to tiny model width
 
             // Check the aspect ratio of current batch to determine model
             float max_aspect_ratio = 0.0f;
@@ -284,23 +318,35 @@ namespace PaddleOCR
             }
 
             // Select model based on maximum aspect ratio in the batch
+            float tiny_threshold = static_cast<float>(tiny_model_width) / static_cast<float>(target_h);
             float small_threshold = static_cast<float>(small_model_width) / static_cast<float>(target_h);
             float medium_threshold = static_cast<float>(medium_model_width) / static_cast<float>(target_h);
+            float big_threshold = static_cast<float>(big_model_width) / static_cast<float>(target_h);
 
-            if (max_aspect_ratio <= small_threshold)
+            if (max_aspect_ratio <= tiny_threshold)
             {
                 model_type = 0;
+                target_w = tiny_model_width;
+            }
+            else if (max_aspect_ratio <= small_threshold)
+            {
+                model_type = 1;
                 target_w = small_model_width;
             }
             else if (max_aspect_ratio <= medium_threshold)
             {
-                model_type = 1;
+                model_type = 2;
                 target_w = medium_model_width;
+            }
+            else if (max_aspect_ratio <= big_threshold)
+            {
+                model_type = 3;
+                target_w = big_model_width;
             }
             else
             {
-                model_type = 2;
-                target_w = big_model_width;
+                model_type = 4;
+                target_w = large_model_width;
             }
 
             // std::cout << "[NPU] Batch " << beg_img_no / batch_num + 1 << ": Using model_type " << model_type
@@ -378,19 +424,21 @@ namespace PaddleOCR
 
             // Inference with OpenVINO - choose appropriate model for NPU
             auto inference_start = std::chrono::steady_clock::now();
-            ov::InferRequest *current_infer_request;
-            if (model_type == 0)
-            {
-                current_infer_request = &infer_request_small_;
-            }
-            else if (model_type == 1)
-            {
-                current_infer_request = &infer_request_medium_;
-            }
-            else
-            {
-                current_infer_request = &infer_request_big_;
-            }
+                ov::InferRequest *current_infer_request = nullptr;
+                if (model_type == 0) {
+                    current_infer_request = &infer_request_tiny_;
+                } else if (model_type == 1) {
+                    current_infer_request = &infer_request_small_;
+                } else if (model_type == 2) {
+                    current_infer_request = &infer_request_medium_;
+                } else if (model_type == 3) {
+                    current_infer_request = &infer_request_big_;
+                } else if (model_type == 4) {
+                    current_infer_request = &infer_request_large_;
+                } else {
+                    std::cerr << "[ERROR] Invalid model_type: " << model_type << std::endl;
+                    continue;
+                }
 
             // ov::InferRequest *current_infer_request = use_small_model ? &infer_request_small_ : &infer_request_big_;
 
@@ -598,7 +646,7 @@ namespace PaddleOCR
             auto inference_start = std::chrono::steady_clock::now();
 
             // Get input tensor
-            auto input_tensor = infer_request_small_.get_input_tensor();
+            auto input_tensor = infer_request_.get_input_tensor();
             input_tensor.set_shape({static_cast<size_t>(batch_size), 3,
                                     static_cast<size_t>(target_h),
                                     static_cast<size_t>(target_w)});
@@ -606,10 +654,10 @@ namespace PaddleOCR
             // Copy input data and run inference
             float *input_data = input_tensor.data<float>();
             std::memcpy(input_data, input.data(), input.size() * sizeof(float));
-            infer_request_small_.infer();
+            infer_request_.infer();
 
             // Get output tensor
-            auto output_tensor = infer_request_small_.get_output_tensor();
+            auto output_tensor = infer_request_.get_output_tensor();
             auto output_shape = output_tensor.get_shape();
             size_t out_num = std::accumulate(output_shape.begin(), output_shape.end(), size_t(1), std::multiplies<size_t>());
 
