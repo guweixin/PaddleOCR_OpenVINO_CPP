@@ -15,6 +15,7 @@
 #include <include/ocr_det_openvino.h>
 #include <include/utility.h>
 #include <include/args.h>
+#include <opencv2/imgcodecs.hpp>
 #include <chrono>
 #include <numeric>
 #include <cstring>
@@ -93,6 +94,7 @@ namespace PaddleOCR
 
             cv::Mat srcimg;
             cv::Mat resize_img;
+            // cv::Mat draw_img;
             img.copyTo(srcimg);
 
             // Memory transfer timing variables for detection
@@ -107,6 +109,7 @@ namespace PaddleOCR
             // auto resize_start = std::chrono::steady_clock::now();
 
             // Preprocessing - device-specific optimizations
+            float actual_scale = 1.0f;
             if (device_ == "NPU")
             {
                 // NPU specific preprocessing: conditional resize with white padding
@@ -125,7 +128,6 @@ namespace PaddleOCR
                 float scale = std::min(scale_h, scale_w);
 
                 cv::Mat processed_img;
-                float actual_scale = 1.0f;
                 int start_x = 0, start_y = 0;
 
                 if (scale < 1.0f)
@@ -178,7 +180,7 @@ namespace PaddleOCR
 
             // auto resize_end = std::chrono::steady_clock::now();
             // auto normalize_start = std::chrono::steady_clock::now();
-
+            // draw_img = resize_img.clone();
             this->normalize_op_.Run(resize_img, this->mean_, this->scale_, this->is_scale_);
 
             // auto normalize_end = std::chrono::steady_clock::now();
@@ -313,17 +315,24 @@ namespace PaddleOCR
             {
                 if (ratio_h != 1.0f || ratio_w != 1.0f)
                 {
-                    // For NPU, apply ratio mapping to the detected boxes
+                    // NPU缩放+padding时，先裁剪有效区域再做文本框检测
+                    int orig_h = img.rows;
+                    int orig_w = img.cols;
+                    int new_w = static_cast<int>(orig_w * actual_scale);
+                    int new_h = static_cast<int>(orig_h * actual_scale);
+                    cv::Rect valid_roi(0, 0, new_w, new_h);
+                    cv::Mat valid_pred_map = pred_map(valid_roi).clone();
+                    cv::Mat valid_bit_map = bit_map(valid_roi).clone();
                     boxes = std::move(post_processor_.BoxesFromBitmap(
-                        pred_map, bit_map, srcimg.cols, srcimg.rows));
+                        valid_pred_map, valid_bit_map, orig_w, orig_h));
                 }
                 else
                 {
+                    // NPU未进行缩放，使用模型输入尺寸作为目标尺寸
                     auto input_tensor = infer_request_.get_input_tensor();
                     auto input_shape = input_tensor.get_shape();
                     int target_h = static_cast<int>(input_shape[2]); // Height dimension
                     int target_w = static_cast<int>(input_shape[3]); // Width dimension
-                    // For NPU, use fixed dimensions for 960 model
                     boxes = std::move(post_processor_.BoxesFromBitmap(
                         pred_map, bit_map, target_h, target_w));
                 }
@@ -338,6 +347,20 @@ namespace PaddleOCR
 
             // auto filter_tag_start = std::chrono::steady_clock::now();
             post_processor_.FilterTagDetRes(boxes, ratio_h, ratio_w, srcimg);
+
+            // NPU分支：将过滤后的文本框画在padding图片上并保存
+            // if (device_ == "NPU") {
+                
+            //     // // 只在NPU分支内使用actual_scale
+            //     for (const auto& box : boxes) {
+            //         std::vector<cv::Point> pts;
+            //         for (const auto& pt : box) {
+            //             pts.emplace_back(cv::Point(static_cast<int>(pt[0] * 1), static_cast<int>(pt[1] * 1)));
+            //         }
+            //         cv::polylines(draw_img, pts, true, cv::Scalar(0, 0, 255), 2);
+            //     }
+            //     cv::imwrite("npu_det_boxes.jpg", draw_img);
+            // }
             // auto filter_tag_end = std::chrono::steady_clock::now();
 
             // auto postprocess_end = std::chrono::steady_clock::now();
