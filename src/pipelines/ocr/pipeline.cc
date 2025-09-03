@@ -201,10 +201,10 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
   }
   auto input_path = batch_sampler_ptr_->InputPath();
   int index = 0;
-  std::vector<cv::Mat> origin_image = {};
   std::vector<std::unique_ptr<BaseCVResult>> base_results = {};
   pipeline_result_vec_.clear();
   for (int i = 0; i < batches.value().size(); i++) {
+    std::vector<cv::Mat> origin_image = {};
     origin_image.reserve(batches.value()[i].size());
     for (const auto &mat : batches.value()[i]) {
       origin_image.push_back(mat.clone());
@@ -241,6 +241,7 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
     std::vector<OCRPipelineResult> results(images_for_processing.size());
     for (int k = 0; k < results.size(); k++, index++) {
       results[k].input_path = input_path[index];
+      results[k].input_image = origin_image[k];
       results[k].dt_polys = dt_polys_list[k];
       results[k].model_settings = model_settings;
       results[k].text_det_params = text_det_params_;
