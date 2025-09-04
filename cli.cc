@@ -14,6 +14,7 @@
 
 #include "src/api/pipelines/ocr.h"
 #include "src/utils/args.h"
+#include "src/utils/simple_config.h"
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -85,14 +86,14 @@ PaddleOCRParams GetPipelineParams() {
   }
   if (!text_det_input_shape.empty()) {
     ocr_params.text_det_input_shape =
-        YamlConfig::SmartParseVector(text_det_input_shape).vec_int;
+        SimpleConfig::SmartParseVector(text_det_input_shape).vec_int;
   }
   if (!text_rec_score_thresh.empty()) {
     ocr_params.text_rec_score_thresh = std::stof(text_rec_score_thresh);
   }
   if (!text_rec_input_shape.empty()) {
     ocr_params.text_rec_input_shape =
-        YamlConfig::SmartParseVector(text_rec_input_shape).vec_int;
+        SimpleConfig::SmartParseVector(text_rec_input_shape).vec_int;
   }
   if (!device.empty()) {
     ocr_params.device = device;

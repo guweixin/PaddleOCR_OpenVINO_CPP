@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "src/utils/status.h"
+#include "src/utils/simple_config.h"
 #include "src/base/base_pipeline.h"
 #include "src/common/image_batch_sampler.h"
 #include "src/common/processors.h"
@@ -101,7 +102,7 @@ public:
 
 private:
   OCRPipelineParams params_;
-  YamlConfig config_;
+  SimpleConfig config_;
   std::unique_ptr<BaseBatchSampler> batch_sampler_ptr_;
   std::vector<OCRPipelineResult> pipeline_result_vec_;
   std::unique_ptr<BasePredictor> text_det_model_;

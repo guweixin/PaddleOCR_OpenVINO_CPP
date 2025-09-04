@@ -15,7 +15,7 @@
 #include "text_recognition.h"
 
 #include "src/utils/args.h"
-#include "src/utils/yaml_config.h"
+#include "src/utils/simple_config.h"
 
 #define COPY_PARAMS(field) to.field = from.field;
 

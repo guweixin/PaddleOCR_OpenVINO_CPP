@@ -22,47 +22,67 @@ TextDetPredictor::TextDetPredictor(const TextDetPredictorParams &params)
                     params.precision, params.cpu_threads,
                     params.batch_size, "image"),
       params_(params) {
+  std::cout << "[DEBUG] TextDetPredictor constructor started" << std::endl;
   auto status = Build();
   if (!status.ok()) {
+    std::cout << "[DEBUG] Build failed: " << status.ToString() << std::endl;
     // INFOE("Build fail: %s", status.ToString().c_str());
     exit(-1);
   }
+  std::cout << "[DEBUG] TextDetPredictor constructor completed successfully" << std::endl;
 };
 
 Status TextDetPredictor::Build() {
+  std::cout << "[DEBUG] TextDetPredictor::Build() started" << std::endl;
+  
   const auto &pre_tfs = config_.PreProcessOpInfo();
+  std::cout << "[DEBUG] Got PreProcessOpInfo, size: " << pre_tfs.size() << std::endl;
+  
   // Register<ReadImage>("Read", pre_tfs.at("DecodeImage.img_mode"));
   Register<ReadImage>("Read");
+  std::cout << "[DEBUG] Registered ReadImage" << std::endl;
   DetResizeForTestParam resize_param;
   resize_param.input_shape = params_.input_shape;
   resize_param.max_side_limit = params_.max_side_limit;
   resize_param.limit_side_len = params_.limit_side_len;
   resize_param.limit_type = params_.limit_type;
   resize_param.max_side_limit = params_.max_side_limit;
+  std::cout << "[DEBUG] About to get DetResizeForTest.resize_long" << std::endl;
   resize_param.resize_long =
       std::stoi(pre_tfs.at("DetResizeForTest.resize_long"));
+  std::cout << "[DEBUG] Got resize_long: " << (resize_param.resize_long.has_value() ? std::to_string(resize_param.resize_long.value()) : "null") << std::endl;
   Register<DetResizeForTest>("Resize", resize_param);
+  std::cout << "[DEBUG] Registered DetResizeForTest" << std::endl;
   Register<NormalizeImage>("Normalize");
+  std::cout << "[DEBUG] Registered NormalizeImage" << std::endl;
   Register<ToCHWImage>("ToCHW");
+  std::cout << "[DEBUG] Registered ToCHWImage" << std::endl;
   Register<ToBatch>("ToBatch");
+  std::cout << "[DEBUG] Registered ToBatch" << std::endl;
+  std::cout << "[DEBUG] About to CreateStaticInfer" << std::endl;
   infer_ptr_ = CreateStaticInfer();
+  std::cout << "[DEBUG] CreateStaticInfer completed" << std::endl;
+  std::cout << "[DEBUG] About to get PostProcessOpInfo" << std::endl;
   const auto &post_params = config_.PostProcessOpInfo();
+  std::cout << "[DEBUG] Got PostProcessOpInfo, size: " << post_params.size() << std::endl;
   DBPostProcessParams db_param;
   db_param.thresh = params_.thresh.has_value()
                         ? params_.thresh
-                        : std::stof(post_params.at("PostProcess.thresh"));
+                        : std::stof(post_params.at("DBPostProcess.thresh"));
   db_param.box_thresh =
       params_.box_thresh.has_value()
           ? params_.box_thresh
-          : std::stof(post_params.at("PostProcess.box_thresh"));
+          : std::stof(post_params.at("DBPostProcess.box_thresh"));
   db_param.unclip_ratio =
       params_.unclip_ratio.has_value()
           ? params_.unclip_ratio
-          : std::stof(post_params.at("PostProcess.unclip_ratio"));
+          : std::stof(post_params.at("DBPostProcess.unclip_ratio"));
   db_param.max_candidates =
-      std::stoi(post_params.at("PostProcess.max_candidates"));
+      std::stoi(post_params.at("DBPostProcess.max_candidates"));
+  std::cout << "[DEBUG] About to create DBPostProcess" << std::endl;
   post_op_["DBPostProcess"] =
       std::unique_ptr<DBPostProcess>(new DBPostProcess(db_param));
+  std::cout << "[DEBUG] DBPostProcess created successfully" << std::endl;
   return Status::OK();
 };
 

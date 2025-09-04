@@ -2,4 +2,4 @@ cmake -G "Visual Studio 16 2019" -A x64 -DWITH_OPENVINO=ON -DOPENCV_DIR="D:/Proj
 
 cmake --build . --config Release
 
-ppocr.exe ocr --input=d:\My_Work_progress_2\HP_Xiaowei\20250626_paddleocr\ocr_data\hp_test\1.png  --text_detection_model_name=PP-OCRv4_mobile_det --text_detection_model_dir=..\..\..\models\PP-OCRv4_mobile_det_infer --text_recognition_model_name=PP-OCRv4_mobile_rec --text_recognition_model_dir=..\..\..\models\PP-OCRv4_mobile_rec_infer  --save_path ..\..\..\output\temp
+ppocr.exe ocr --input=d:\My_Work_progress_2\HP_Xiaowei\20250626_paddleocr\ocr_data\hp_test\1.png  --text_detection_model_name=PP-OCRv4_mobile_det --text_detection_model_dir=..\..\..\models\PP-OCRv4_mobile_det_infer --text_recognition_model_name=PP-OCRv4_mobile_rec --text_recognition_model_dir=..\..\..\models\PP-OCRv4_mobile_rec_infer  --save_path=..\..\..\output\temp

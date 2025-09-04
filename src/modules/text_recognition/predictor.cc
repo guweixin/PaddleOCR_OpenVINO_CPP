@@ -15,34 +15,71 @@
 #include "predictor.h"
 
 #include <algorithm>
+#include <tuple>
 
 #include "result.h"
 #include "src/common/image_batch_sampler.h"
+#include "src/utils/utility.h"
 
 TextRecPredictor::TextRecPredictor(const TextRecPredictorParams &params)
     : BasePredictor(params.model_dir, params.model_name, params.device,
                     params.precision, params.cpu_threads,
                     params.batch_size, "image"),
       params_(params) {
+  std::cout << "[DEBUG] TextRecPredictor constructor started" << std::endl;
   auto status = CheckRecModelParams();
   auto status_build = Build();
   if (!status_build.ok()) {
+    std::cout << "[DEBUG] Build failed: " << status_build.ToString() << std::endl;
     INFOE("Build fail: %s", status_build.ToString().c_str());
     exit(-1);
   }
+  std::cout << "[DEBUG] TextRecPredictor constructor completed successfully" << std::endl;
 };
 
 Status TextRecPredictor::Build() {
+  std::cout << "[DEBUG] TextRecPredictor Build() started" << std::endl;
+  
   const auto &pre_params = config_.PreProcessOpInfo();
+  std::cout << "[DEBUG] Got PreProcessOpInfo" << std::endl;
+  
   Register<ReadImage>("Read", "BGR"); //******
+  std::cout << "[DEBUG] Registered ReadImage" << std::endl;
+  
   Register<OCRReisizeNormImg>("ReisizeNorm", params_.input_shape);
+  std::cout << "[DEBUG] Registered OCRReisizeNormImg" << std::endl;
+  
   Register<ToBatchUniform>("ToBatch");
+  std::cout << "[DEBUG] Registered ToBatchUniform" << std::endl;
+  
   infer_ptr_ = CreateStaticInfer();
+  std::cout << "[DEBUG] CreateStaticInfer completed" << std::endl;
+  
+  std::cout << "[DEBUG] About to get PostProcessOpInfo" << std::endl;
   const auto &post_params = config_.PostProcessOpInfo();
+  std::cout << "[DEBUG] Got PostProcessOpInfo, size: " << post_params.size() << std::endl;
+  
+  for (const auto& param : post_params) {
+    std::cout << "[DEBUG] PostProcess param: " << param.first << " = " << param.second << std::endl;
+  }
+  
+  std::cout << "[DEBUG] Looking for PostProcess.character_dict..." << std::endl;
+  auto it = post_params.find("PostProcess.character_dict");
+  if (it == post_params.end()) {
+    std::cout << "[DEBUG] PostProcess.character_dict not found!" << std::endl;
+    return Status::InternalError("PostProcess.character_dict not found");
+  }
+  
+  std::cout << "[DEBUG] Creating CTCLabelDecode with character_dict: " << it->second << std::endl;
+  
+  // Load character dictionary from file
+  std::vector<std::string> character_list = SimpleConfig::LoadCharacterDict(it->second);
+  
   post_op_["CTCLabelDecode"] = std::unique_ptr<CTCLabelDecode>(
-      new CTCLabelDecode(YamlConfig::SmartParseVector(
-                             post_params.at("PostProcess.character_dict"))
-                             .vec_string));
+      new CTCLabelDecode(character_list));
+  std::cout << "[DEBUG] CTCLabelDecode created successfully" << std::endl;
+  
+  std::cout << "[DEBUG] TextRecPredictor Build() completed successfully" << std::endl;
   return Status::OK();
 };
 

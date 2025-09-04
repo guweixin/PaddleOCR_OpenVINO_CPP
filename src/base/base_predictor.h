@@ -26,7 +26,7 @@
 #include "src/common/static_infer.h"
 #include "src/utils/func_register.h"
 #include "src/utils/pp_option.h"
-#include "src/utils/yaml_config.h"
+#include "src/utils/simple_config.h"
 
 class BasePredictor {
 public:
@@ -46,7 +46,7 @@ public:
 
   const PaddlePredictorOption &PPOption();
   StatusOr<std::string> ModelName() { return model_name_; };
-  std::string ConfigPath() { return config_.ConfigYamlPath(); };
+  std::string ConfigPath() { return model_dir_.value_or(""); };
 
   void SetBatchSize(int batch_size);
 
@@ -68,7 +68,7 @@ public:
 
 protected:
   std::optional<std::string> model_dir_;
-  YamlConfig config_;
+  SimpleConfig config_;
   int batch_size_;
   std::unique_ptr<BaseBatchSampler> batch_sampler_ptr_;
   std::unique_ptr<PaddlePredictorOption> pp_option_ptr_;
