@@ -21,7 +21,7 @@
 #include "src/utils/status.h"
 #include "src/utils/status.h"
 #include "openvino/openvino.hpp"
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/pp_option.h"
 
 class OpenVinoInfer {

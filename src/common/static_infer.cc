@@ -16,7 +16,7 @@
 
 #include <fstream>
 
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/utility.h"
 
 PaddleInfer::PaddleInfer(const std::string &model_name,

@@ -18,7 +18,7 @@
 
 #include "base_batch_sampler.h"
 #include "src/common/image_batch_sampler.h"
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/pp_option.h"
 #include "src/utils/utility.h"
 

@@ -21,7 +21,7 @@
 #include <cctype>
 #include <iostream>
 
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/utility.h"
 
 const std::set<std::string> ImageBatchSampler::kImgSuffixes = {"jpg", "png",

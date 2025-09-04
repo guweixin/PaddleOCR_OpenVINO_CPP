@@ -109,6 +109,10 @@ public:
   SmartCreateDirectoryForJson(const std::string &save_path,
                               const std::string &input_path,
                               const std::string &suffix = "_res");
+  static StatusOr<std::string>
+  SmartCreateDirectoryForTxt(const std::string &save_path,
+                             const std::string &input_path,
+                             const std::string &suffix = "_res");
 
   static StatusOr<int> StringToInt(std::string s);
   static bool StringToBool(const std::string &str);

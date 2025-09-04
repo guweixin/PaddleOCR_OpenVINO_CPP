@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "src/api/pipelines/ocr.h"
+#include "src/pipelines/ocr/result.h"
 #include "src/utils/args.h"
 #include "src/utils/simple_config.h"
 #include <functional>
@@ -138,6 +139,11 @@ int main(int argc, char *argv[]) {
     output->Print();
     output->SaveToImg(save_path);
     output->SaveToJson(save_path);
+    
+    // Cast to OCRResult to access SaveToTxt method
+    if (OCRResult* ocr_result = dynamic_cast<OCRResult*>(output.get())) {
+      ocr_result->SaveToTxt(save_path);
+    }
   }
   return 0;
 }

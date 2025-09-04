@@ -14,7 +14,7 @@
 
 #include "base_batch_sampler.h"
 
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/utility.h"
 int BaseBatchSampler::BatchSize() const { return batch_size_; }
 

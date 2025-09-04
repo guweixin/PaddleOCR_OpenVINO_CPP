@@ -21,7 +21,7 @@
 #include "src/utils/status.h"
 #include "src/utils/status.h"
 #include "paddle_inference_api.h"
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/pp_option.h"
 class PaddleInfer {
 public:

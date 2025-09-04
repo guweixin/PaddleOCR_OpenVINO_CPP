@@ -27,7 +27,7 @@
 #include "src/common/processors.h"
 #include "src/modules/text_detection/predictor.h"
 #include "src/modules/text_recognition/predictor.h"
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/utility.h"
 
 struct TextDetParams {

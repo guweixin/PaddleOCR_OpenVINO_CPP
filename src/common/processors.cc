@@ -20,7 +20,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
-#include "src/utils/ilogger.h"
+#include "src/utils/simple_logger.h"
 #include "src/utils/utility.h"
 
 StatusOr<int> Resize::GetInterp(const std::string &interp) {

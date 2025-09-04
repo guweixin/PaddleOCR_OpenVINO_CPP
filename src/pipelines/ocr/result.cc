@@ -370,6 +370,48 @@ void OCRResult::SaveToJson(const std::string &save_path) const {
   }
 }
 
+void OCRResult::SaveToTxt(const std::string &save_path) const {
+  StatusOr<std::string> full_path;
+  if (pipeline_result_.input_path.empty()) {
+    INFOW("Input path is empty, will use output_rec_texts.txt instead!");
+    full_path = Utility::SmartCreateDirectoryForTxt(save_path, "output_rec_texts");
+  } else {
+    // Extract filename without extension and add _rec_texts.txt
+    std::string input_filename = pipeline_result_.input_path;
+    size_t last_dot = input_filename.find_last_of('.');
+    size_t last_slash = input_filename.find_last_of("/\\");
+    if (last_slash != std::string::npos) {
+      input_filename = input_filename.substr(last_slash + 1);
+    }
+    if (last_dot != std::string::npos) {
+      input_filename = input_filename.substr(0, last_dot);
+    }
+    input_filename += "_rec_texts";
+    full_path = Utility::SmartCreateDirectoryForTxt(save_path, input_filename);
+  }
+  
+  if (!full_path.ok()) {
+    INFOE(full_path.status().ToString().c_str());
+    exit(-1);
+  }
+  
+  std::ofstream file(full_path.value(), std::ios::out | std::ios::trunc);
+  if (file.is_open()) {
+    for (size_t i = 0; i < pipeline_result_.rec_texts.size(); ++i) {
+      file << pipeline_result_.rec_texts[i];
+      // Add newline unless it's the last line
+      if (i < pipeline_result_.rec_texts.size() - 1) {
+        file << std::endl;
+      }
+    }
+    file.close();
+    INFO("Saved recognition texts to: %s", full_path.value().c_str());
+  } else {
+    INFOE("Could not open file for writing: %s", full_path.value().c_str());
+    exit(-1);
+  }
+}
+
 // Removed PrintDocPreprocessorPipelineResult as doc_preprocessor functionality was removed
 
 void PrintPolys(const std::vector<std::vector<cv::Point2f>> &polys) {

@@ -14,7 +14,7 @@
 
 #include "simple_config.h"
 #include "utility.h"
-#include "ilogger.h"
+#include "simple_logger.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>

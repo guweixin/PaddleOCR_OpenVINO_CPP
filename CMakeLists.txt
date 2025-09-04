@@ -72,7 +72,7 @@ endif ()
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 if (WIN32)
-    add_definitions("/DGOOGLE_GLOG_DLL_DECL=")
+    # Removed glog definition - using SimpleLogger now
     set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} /bigobj /MTd")
     set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} /bigobj /MT")
     set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} /bigobj /MTd")
@@ -104,7 +104,7 @@ if (WITH_GPU)
 endif()
 
 include_directories("${PADDLE_LIB}/third_party/install/protobuf/include")
-include_directories("${PADDLE_LIB}/third_party/install/glog/include")
+# Removed glog include - using SimpleLogger now
 include_directories("${PADDLE_LIB}/third_party/install/xxhash/include")
 include_directories("${PADDLE_LIB}/third_party/install/zlib/include")
 include_directories("${PADDLE_LIB}/third_party/install/onnxruntime/include")
@@ -128,7 +128,7 @@ include_directories("${CMAKE_SOURCE_DIR}/")
 
 link_directories("${PADDLE_LIB}/third_party/install/zlib/lib")
 link_directories("${PADDLE_LIB}/third_party/install/protobuf/lib")
-link_directories("${PADDLE_LIB}/third_party/install/glog/lib")
+# Removed glog link directory - using SimpleLogger now
 link_directories("${PADDLE_LIB}/third_party/install/xxhash/lib")
 link_directories("${PADDLE_LIB}/third_party/install/onnxruntime/lib")
 link_directories("${PADDLE_LIB}/third_party/install/paddle2onnx/lib")
@@ -165,7 +165,7 @@ endif(WITH_STATIC_LIB)
 if (NOT WIN32)
     set(DEPS ${DEPS}
         ${MATH_LIB}
-        glog protobuf z xxhash
+        protobuf z xxhash
         )
     if(EXISTS "${PADDLE_LIB}/third_party/install/snappystream/lib")
         set(DEPS ${DEPS} snappystream)
@@ -176,7 +176,7 @@ if (NOT WIN32)
 else()
     set(DEPS ${DEPS}
         ${MATH_LIB}
-        glog libprotobuf xxhash)
+        libprotobuf xxhash)
     set(DEPS ${DEPS} libcmt shlwapi)
     if (EXISTS "${PADDLE_LIB}/third_party/install/snappy/lib")
         set(DEPS ${DEPS} snappy)
@@ -247,6 +247,8 @@ if(UNIX)
 endif()
 
 file(GLOB_RECURSE SRC_LIST "./src/*.cc")
+# Remove ilogger.cc from compilation since we use SimpleLogger now
+list(REMOVE_ITEM SRC_LIST "${CMAKE_SOURCE_DIR}/src/utils/ilogger.cc")
 set(SRCS cli.cc )
 add_executable(${DEMO_NAME} ${SRCS} ${SRC_LIST} )
 target_link_libraries(${DEMO_NAME} ${DEPS} )

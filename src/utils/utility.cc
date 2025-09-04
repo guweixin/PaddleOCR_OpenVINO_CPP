@@ -19,7 +19,7 @@
 
 #include <regex>
 
-#include "ilogger.h"
+#include "simple_logger.h"
 
 Status Utility::FileExists(const std::string &path) {
   struct stat st;
@@ -363,6 +363,21 @@ Utility::SmartCreateDirectoryForJson(const std::string &save_path,
   size_t pos = full_path.value().rfind('.');
   if (pos != std::string::npos) {
     full_path.value().replace(pos, std::string::npos, ".json");
+  }
+  return full_path.value();
+}
+
+StatusOr<std::string>
+Utility::SmartCreateDirectoryForTxt(const std::string &save_path,
+                                    const std::string &input_path,
+                                    const std::string &suffix) {
+  auto full_path = SmartCreateDirectoryForImage(save_path, input_path, suffix);
+  if (!full_path.ok()) {
+    return full_path.status();
+  }
+  size_t pos = full_path.value().rfind('.');
+  if (pos != std::string::npos) {
+    full_path.value().replace(pos, std::string::npos, ".txt");
   }
   return full_path.value();
 }
