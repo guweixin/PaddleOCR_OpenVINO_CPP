@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@
 #include "src/utils/pp_option.h"
 #include "src/utils/utility.h"
 
-BasePredictor::BasePredictor(const absl::optional<std::string> &model_dir,
-                             const absl::optional<std::string> &model_name,
-                             const absl::optional<std::string> &device,
+BasePredictor::BasePredictor(const std::optional<std::string> &model_dir,
+                             const std::optional<std::string> &model_name,
+                             const std::optional<std::string> &device,
                              const std::string &precision,
                              int cpu_threads,
                              int batch_size, const std::string sampler_type)
@@ -112,14 +112,14 @@ std::unique_ptr<PaddleInfer> BasePredictor::CreateStaticInfer() {
       model_name_, model_dir_.value(), MODEL_FILE_PREFIX, PPOption()));
 }
 
-absl::Status BasePredictor::BuildBatchSampler() {
+Status BasePredictor::BuildBatchSampler() {
   if (SAMPLER_TYPE.count(sampler_type_) == 0) {
-    return absl::InvalidArgumentError("Unsupported sampler type !");
+    return Status::InvalidArgumentError("Unsupported sampler type !");
   } else if (sampler_type_ == "image") {
     batch_sampler_ptr_ =
         std::unique_ptr<BaseBatchSampler>(new ImageBatchSampler(batch_size_));
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
 const std::unordered_set<std::string> BasePredictor::SAMPLER_TYPE = {
@@ -127,3 +127,4 @@ const std::unordered_set<std::string> BasePredictor::SAMPLER_TYPE = {
 };
 
 bool BasePredictor::print_flag = true;
+

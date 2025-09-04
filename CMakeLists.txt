@@ -1,12 +1,11 @@
-project(ppocr CXX)
+﻿project(ppocr CXX)
 cmake_minimum_required(VERSION 3.14)
 
 set(DEMO_NAME "ppocr")
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-option(WITH_MKL        "Compile demo with MKL/OpenBlas support, default use MKL."       ON)
 option(WITH_GPU        "Compile demo with GPU/CPU, default use CPU."                    OFF)
 option(WITH_STATIC_LIB "Compile demo with static/shared library, default use static."   ON)
 # option(WITH_OPENVINO   "Enable OpenVINO inference support."                             ON)
@@ -27,10 +26,6 @@ macro(safe_set_static_flag)
       endif(${flag_var} MATCHES "/MD")
     endforeach(flag_var)
 endmacro()
-
-if (WITH_MKL)
-    ADD_DEFINITIONS(-DUSE_MKL)
-endif()
 
 if(NOT DEFINED PADDLE_LIB)
   message(FATAL_ERROR "please set PADDLE_LIB with -DPADDLE_LIB=/path/paddle/lib")
@@ -78,13 +73,10 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 
 if (WIN32)
     add_definitions("/DGOOGLE_GLOG_DLL_DECL=")
-    if(WITH_MKL)
-        set(FLAG_OPENMP "/openmp")
-    endif()
-    set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} /bigobj /MTd ${FLAG_OPENMP}")
-    set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} /bigobj /MT ${FLAG_OPENMP}")
-    set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} /bigobj /MTd ${FLAG_OPENMP}")
-    set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_CXX_FLAGS_RELEASE} /bigobj /MT ${FLAG_OPENMP}")
+    set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS_DEBUG} /bigobj /MTd")
+    set(CMAKE_C_FLAGS_RELEASE  "${CMAKE_C_FLAGS_RELEASE} /bigobj /MT")
+    set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} /bigobj /MTd")
+    set(CMAKE_CXX_FLAGS_RELEASE   "${CMAKE_CXX_FLAGS_RELEASE} /bigobj /MT")
     if (WITH_STATIC_LIB)
         safe_set_static_flag()
         add_definitions(-DSTATIC_LIB)
@@ -95,10 +87,7 @@ if (WIN32)
     message("cmake cxx debug flags " ${CMAKE_CXX_FLAGS_DEBUG})
     message("cmake cxx release flags " ${CMAKE_CXX_FLAGS_RELEASE})
 else()
-    if(WITH_MKL)
-        set(FLAG_OPENMP "-fopenmp")
-    endif()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 ${FLAG_OPENMP} -std=c++11")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -std=c++11")
     set(CMAKE_STATIC_LIBRARY_PREFIX "")
     message("cmake cxx flags" ${CMAKE_CXX_FLAGS})
 endif()
@@ -117,7 +106,6 @@ endif()
 
 include_directories("${PADDLE_LIB}/third_party/install/protobuf/include")
 include_directories("${PADDLE_LIB}/third_party/install/glog/include")
-include_directories("${PADDLE_LIB}/third_party/install/gflags/include")
 include_directories("${PADDLE_LIB}/third_party/install/xxhash/include")
 include_directories("${PADDLE_LIB}/third_party/install/zlib/include")
 include_directories("${PADDLE_LIB}/third_party/install/onnxruntime/include")
@@ -143,7 +131,6 @@ include_directories("${CMAKE_SOURCE_DIR}/")
 link_directories("${PADDLE_LIB}/third_party/install/zlib/lib")
 link_directories("${PADDLE_LIB}/third_party/install/protobuf/lib")
 link_directories("${PADDLE_LIB}/third_party/install/glog/lib")
-link_directories("${PADDLE_LIB}/third_party/install/gflags/lib")
 link_directories("${PADDLE_LIB}/third_party/install/xxhash/lib")
 link_directories("${PADDLE_LIB}/third_party/install/onnxruntime/lib")
 link_directories("${PADDLE_LIB}/third_party/install/paddle2onnx/lib")
@@ -152,31 +139,11 @@ link_directories("${PADDLE_LIB}/third_party/install/openvino/intel64")
 link_directories("${PADDLE_LIB}/third_party/install/tbb/lib")
 link_directories("${PADDLE_LIB}/paddle/lib")
 
-if(WITH_MKL)
-  include_directories("${PADDLE_LIB}/third_party/install/mklml/include")
-  if (WIN32)
-    set(MATH_LIB ${PADDLE_LIB}/third_party/install/mklml/lib/mklml.lib
-            ${PADDLE_LIB}/third_party/install/mklml/lib/libiomp5md.lib)
-  else ()
-    set(MATH_LIB ${PADDLE_LIB}/third_party/install/mklml/lib/libmklml_intel${CMAKE_SHARED_LIBRARY_SUFFIX}
-            ${PADDLE_LIB}/third_party/install/mklml/lib/libiomp5${CMAKE_SHARED_LIBRARY_SUFFIX})
-    execute_process(COMMAND cp -r ${PADDLE_LIB}/third_party/install/mklml/lib/libmklml_intel${CMAKE_SHARED_LIBRARY_SUFFIX} /usr/lib)
-  endif ()
-  set(MKLDNN_PATH "${PADDLE_LIB}/third_party/install/onednn")
-  if(EXISTS ${MKLDNN_PATH})
-    include_directories("${MKLDNN_PATH}/include")
-    if (WIN32)
-      set(MKLDNN_LIB ${MKLDNN_PATH}/lib/mkldnn.lib)
-    else ()
-      set(MKLDNN_LIB ${MKLDNN_PATH}/lib/libdnnl.so.3)
-    endif ()
-  endif()
-else()
-  if (WIN32)
-    set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/openblas${CMAKE_STATIC_LIBRARY_SUFFIX})
-  else ()
-    set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
-  endif ()
+# Use OpenBLAS instead of MKL
+if (WIN32)
+  set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/openblas${CMAKE_STATIC_LIBRARY_SUFFIX})
+else ()
+  set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
 endif()
 
 # Note: libpaddle_inference_api.so/a must put before libpaddle_inference.so/a
@@ -200,8 +167,8 @@ endif(WITH_STATIC_LIB)
 
 if (NOT WIN32)
     set(DEPS ${DEPS}
-        ${MATH_LIB} ${MKLDNN_LIB}
-        glog gflags protobuf z xxhash
+        ${MATH_LIB}
+        glog protobuf z xxhash
         )
     if(EXISTS "${PADDLE_LIB}/third_party/install/snappystream/lib")
         set(DEPS ${DEPS} snappystream)
@@ -211,8 +178,8 @@ if (NOT WIN32)
     endif()
 else()
     set(DEPS ${DEPS}
-        ${MATH_LIB} ${MKLDNN_LIB}
-        glog gflags_static libprotobuf xxhash)
+        ${MATH_LIB}
+        glog libprotobuf xxhash)
     set(DEPS ${DEPS} libcmt shlwapi)
     if (EXISTS "${PADDLE_LIB}/third_party/install/snappy/lib")
         set(DEPS ${DEPS} snappy)
@@ -259,7 +226,7 @@ function(download_and_decompress url filename decompress_dir)
 endfunction()
 
 
-set(PACKAGE_LIST abseil-cpp clipper_ver6.4.2 nlohmann)
+set(PACKAGE_LIST clipper_ver6.4.2 nlohmann)
 foreach(PKG ${PACKAGE_LIST})
     set(PKG_URL "https://paddle-model-ecology.bj.bcebos.com/paddlex/cpp/libs/${PKG}.tgz")
     set(PKG_TGZ_PATH "${CMAKE_CURRENT_BINARY_DIR}/${PKG}.tgz")
@@ -267,12 +234,10 @@ foreach(PKG ${PACKAGE_LIST})
     download_and_decompress(${PKG_URL} ${PKG_TGZ_PATH} ${PKG_DST_PATH})
 endforeach()
 
-add_subdirectory(third_party/abseil-cpp)
 add_subdirectory(third_party/clipper_ver6.4.2/cpp)
 include_directories(${POLYCLIPPING_INCLUDE_DIR})
 
 set(DEPS ${DEPS} ${OpenCV_LIBS})
-set(DEPS ${DEPS} absl::statusor)
 set(DEPS ${DEPS} polyclipping)
 
 # # Add OpenVINO libraries if enabled
@@ -293,13 +258,3 @@ set(SRCS cli.cc )
 add_executable(${DEMO_NAME} ${SRCS} ${SRC_LIST} )
 target_link_libraries(${DEMO_NAME} ${DEPS} )
 
-if (WIN32 AND WITH_MKL)
-    add_custom_command(TARGET ${DEMO_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PADDLE_LIB}/third_party/install/mklml/lib/mklml.dll ./mklml.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PADDLE_LIB}/third_party/install/mklml/lib/libiomp5md.dll ./libiomp5md.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PADDLE_LIB}/third_party/install/onednn/lib/mkldnn.dll ./mkldnn.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PADDLE_LIB}/third_party/install/mklml/lib/mklml.dll ./release/mklml.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PADDLE_LIB}/third_party/install/mklml/lib/libiomp5md.dll ./release/libiomp5md.dll
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PADDLE_LIB}/third_party/install/onednn/lib/mkldnn.dll ./release/mkldnn.dll
-    )
-endif()

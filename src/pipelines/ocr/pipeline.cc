@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -148,11 +148,11 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
       new ImageBatchSampler(1)); //** pipeline batch_size
 };
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 _OCRPipeline::RotateImage(const std::vector<cv::Mat> &image_array_list,
                           const std::vector<int> &rotate_angle_list) {
   if (image_array_list.size() != rotate_angle_list.size()) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "Length of image_array_list (" +
         std::to_string(image_array_list.size()) +
         ") must match length of rotate_angle_list (" +
@@ -163,7 +163,7 @@ _OCRPipeline::RotateImage(const std::vector<cv::Mat> &image_array_list,
   for (std::size_t i = 0; i < image_array_list.size(); ++i) {
     int angle_indicator = rotate_angle_list[i];
     if (angle_indicator != 0 && angle_indicator != 1) {
-      return absl::InvalidArgumentError(
+      return Status::InvalidArgumentError(
           "rotate_angle must be 0 or 1, now it's: " +
           std::to_string(angle_indicator));
     }
@@ -404,3 +404,4 @@ void _OCRPipeline::OverrideConfig() {
     }
   }
 }
+

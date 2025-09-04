@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,11 +37,11 @@ void TextRecognition::CreateModel() {
       new TextRecPredictor(ToTextRecognitionModelParams(params_)));
 }
 
-absl::Status TextRecognition::CheckParams() {
+Status TextRecognition::CheckParams() {
   if (!params_.model_dir.has_value()) {
-    return absl::NotFoundError("Require text recognition model_dir.");
+    return Status::NotFoundError("Require text recognition model_dir.");
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
 TextRecPredictorParams TextRecognition::ToTextRecognitionModelParams(
@@ -53,9 +53,8 @@ TextRecPredictorParams TextRecognition::ToTextRecognitionModelParams(
   COPY_PARAMS(input_shape)
   COPY_PARAMS(vis_font_dir)
   COPY_PARAMS(device)
-  COPY_PARAMS(enable_mkldnn)
-  COPY_PARAMS(mkldnn_cache_capacity)
   COPY_PARAMS(precision)
   COPY_PARAMS(cpu_threads)
   return to;
 }
+

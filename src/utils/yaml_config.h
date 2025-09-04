@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "utility.h"
+#include "src/utils/status.h"
+#include "src/utils/status.h"
+#include "src/utils/utility.h"
 
 enum VectorType { VECTOR_INT, VECTOR_FLOAT, VECTOR_STRING, VECTOR_UNKNOWN };
 
@@ -47,29 +47,29 @@ public:
   std::unordered_map<std::string, std::string> PostProcessOpInfo() {
     return post_process_op_info_;
   };
-  absl::StatusOr<std::string>
+  StatusOr<std::string>
   GetString(const std::string &key,
             const std::string &default_value = "") const;
-  absl::StatusOr<int> GetInt(const std::string &key, int default_value) const;
-  absl::StatusOr<float> GetFloat(const std::string &key,
+  StatusOr<int> GetInt(const std::string &key, int default_value) const;
+  StatusOr<float> GetFloat(const std::string &key,
                                  float default_value) const;
-  absl::StatusOr<double> GetDouble(const std::string &key) const;
-  absl::StatusOr<bool> GetBool(const std::string &key,
+  StatusOr<double> GetDouble(const std::string &key) const;
+  StatusOr<bool> GetBool(const std::string &key,
                                bool default_value) const;
-  absl::StatusOr<std::unordered_map<std::string, std::string>>
+  StatusOr<std::unordered_map<std::string, std::string>>
   GetSubModule(const std::string &key) const;
 
-  absl::Status HasKey(const std::string &key) const;
+  Status HasKey(const std::string &key) const;
 
-  absl::Status PrintAll() const;
-  absl::Status PrintWithPrefix(const std::string &prefix) const;
-  absl::Status FindPreProcessOp(
+  Status PrintAll() const;
+  Status PrintWithPrefix(const std::string &prefix) const;
+  Status FindPreProcessOp(
       const std::string &prefix = "PreProcess.transform_ops[0]") const;
   std::unordered_map<std::string, std::string> &Data() { return data_; };
   std::string ConfigYamlPath() { return config_yaml_path_; };
-  absl::Status GetConfigYamlPaths(const std::string &model_dir);
-  absl::Status LoadYamlFile();
-  absl::StatusOr<std::pair<std::string, std::string>>
+  Status GetConfigYamlPaths(const std::string &model_dir);
+  Status LoadYamlFile();
+  StatusOr<std::pair<std::string, std::string>>
   FindKey(const std::string &key);
   static VectorVariant SmartParseVector(const std::string &input);
 
@@ -80,3 +80,4 @@ private:
   std::unordered_map<std::string, std::string> pre_process_op_info_;
   std::unordered_map<std::string, std::string> post_process_op_info_;
 };
+

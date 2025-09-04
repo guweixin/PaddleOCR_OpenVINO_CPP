@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
+#include "src/utils/status.h"
 #include "openvino/openvino.hpp"
 #include "src/utils/ilogger.h"
 #include "src/utils/pp_option.h"
@@ -32,7 +32,7 @@ public:
                          const PaddlePredictorOption &option);
   ~OpenVinoInfer() = default;
   
-  absl::StatusOr<std::vector<cv::Mat>>
+  StatusOr<std::vector<cv::Mat>>
   Apply(const std::vector<cv::Mat> &x);
 
 private:
@@ -49,6 +49,7 @@ private:
   std::vector<std::string> input_names_;
   std::vector<std::string> output_names_;
 
-  absl::Status Create();
-  absl::Status CheckRunMode();
+  Status Create();
+  Status CheckRunMode();
 };
+

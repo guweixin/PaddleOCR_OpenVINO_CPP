@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ void TextDetResult::SaveToImg(const std::string &save_path) {
     cv::polylines(img, &pts_ptr, &npts, 1, true, cv::Scalar(0, 0, 255), 2);
   }
 
-  absl::StatusOr<std::string> full_path;
+  StatusOr<std::string> full_path;
   if (predictor_result_.input_path.empty()) {
     auto now = std::chrono::system_clock::now();
     auto now_time = std::chrono::system_clock::to_time_t(now);
@@ -116,7 +116,7 @@ void TextDetResult::SaveToJson(const std::string &save_path) const {
   j["dt_polys"] = polys_json;
   j["dt_score"] = predictor_result_.dt_scores;
 
-  absl::StatusOr<std::string> full_path;
+  StatusOr<std::string> full_path;
 
   full_path = Utility::SmartCreateDirectoryForJson(
       save_path, predictor_result_.input_path);
@@ -133,3 +133,4 @@ void TextDetResult::SaveToJson(const std::string &save_path) const {
     exit(-1);
   }
 }
+

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include "src/utils/ilogger.h"
 #include "src/utils/utility.h"
 
-absl::StatusOr<int> Resize::GetInterp(const std::string &interp) {
+StatusOr<int> Resize::GetInterp(const std::string &interp) {
   static const std::unordered_map<std::string, int> interp_map = {
       {"NEAREST", cv::INTER_NEAREST},
       {"LINEAR", cv::INTER_LINEAR},
@@ -50,14 +50,14 @@ Resize::RescaleSize(const std::vector<int> &img_size) const {
   return std::make_pair(rescaled_size, scale);
 }
 
-absl::Status Resize::CheckImageSize() const {
+Status Resize::CheckImageSize() const {
   if (target_size_.size() != 2) {
-    return absl::InvalidArgumentError("Size must be a vector of two elements.");
+    return Status::InvalidArgumentError("Size must be a vector of two elements.");
   }
   if (target_size_[0] <= 0 || target_size_[1] <= 0) {
-    return absl::InvalidArgumentError("Width and height must be positive.");
+    return Status::InvalidArgumentError("Width and height must be positive.");
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
 Resize::Resize(const std::vector<int> &target_size, bool keep_ratio,
@@ -68,7 +68,7 @@ Resize::Resize(const std::vector<int> &target_size, bool keep_ratio,
   } else {
     target_size_ = target_size;
   }
-  absl::Status status = CheckImageSize();
+  Status status = CheckImageSize();
   if (!status.ok()) {
     INFOE("image check fail : %s", status.ToString().c_str());
     exit(-1);
@@ -85,7 +85,7 @@ Resize::Resize(const std::vector<int> &target_size, bool keep_ratio,
   interp_ = interp_value.value();
 }
 
-absl::StatusOr<std::vector<cv::Mat>> Resize::Apply(std::vector<cv::Mat> &input,
+StatusOr<std::vector<cv::Mat>> Resize::Apply(std::vector<cv::Mat> &input,
                                                    const void *param) const {
   std::vector<cv::Mat> out_imgs;
   for (const auto &img : input) {
@@ -97,9 +97,9 @@ absl::StatusOr<std::vector<cv::Mat>> Resize::Apply(std::vector<cv::Mat> &input,
   return out_imgs;
 }
 
-absl::StatusOr<cv::Mat> Resize::ResizeOne(const cv::Mat &img) const {
+StatusOr<cv::Mat> Resize::ResizeOne(const cv::Mat &img) const {
   if (img.empty()) {
-    return absl::InvalidArgumentError("Input image is empty.");
+    return Status::InvalidArgumentError("Input image is empty.");
   }
 
   std::vector<int> cur_target = target_size_;
@@ -139,7 +139,7 @@ ResizeByShort::ResizeByShort(int target_short_edge, int size_divisor,
   }
   interp_ = interp_value.value();
 }
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 ResizeByShort::Apply(std::vector<cv::Mat> &input, const void *param) const {
   std::vector<cv::Mat> out_imgs;
   for (auto &image : input) {
@@ -151,9 +151,9 @@ ResizeByShort::Apply(std::vector<cv::Mat> &input, const void *param) const {
   return out_imgs;
 }
 
-absl::StatusOr<cv::Mat> ResizeByShort::ResizeOne(const cv::Mat &img) const {
+StatusOr<cv::Mat> ResizeByShort::ResizeOne(const cv::Mat &img) const {
   if (img.empty()) {
-    return absl::InvalidArgumentError("Input image is empty.");
+    return Status::InvalidArgumentError("Input image is empty.");
   }
   int h = img.size[0];
   int w = img.size[1];
@@ -183,10 +183,10 @@ ReadImage::ReadImage(const std::string &format) {
   format_ = *fmt;
 }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 ReadImage::Apply(std::vector<cv::Mat> &input, const void *param_ptr) const {
   if (input.empty()) {
-    return absl::InvalidArgumentError("Input image vector is empty.");
+    return Status::InvalidArgumentError("Input image vector is empty.");
   }
   std::vector<cv::Mat> output;
   output.reserve(input.size());
@@ -194,7 +194,7 @@ ReadImage::Apply(std::vector<cv::Mat> &input, const void *param_ptr) const {
   for (size_t i = 0; i < input.size(); ++i) {
     const cv::Mat &img = input[i];
     if (img.empty()) {
-      return absl::InvalidArgumentError("Image at index " + std::to_string(i) +
+      return Status::InvalidArgumentError("Image at index " + std::to_string(i) +
                                         " is empty.");
     }
 
@@ -206,7 +206,7 @@ ReadImage::Apply(std::vector<cv::Mat> &input, const void *param_ptr) const {
       } else if (img.channels() == 1) {
         cv::cvtColor(img, converted, cv::COLOR_GRAY2BGR);
       } else {
-        return absl::InvalidArgumentError("Image at index " +
+        return Status::InvalidArgumentError("Image at index " +
                                           std::to_string(i) +
                                           " channel not supported for BGR.");
       }
@@ -217,7 +217,7 @@ ReadImage::Apply(std::vector<cv::Mat> &input, const void *param_ptr) const {
       } else if (img.channels() == 1) {
         cv::cvtColor(img, converted, cv::COLOR_GRAY2RGB);
       } else {
-        return absl::InvalidArgumentError("Image at index " +
+        return Status::InvalidArgumentError("Image at index " +
                                           std::to_string(i) +
                                           " channel not supported for RGB.");
       }
@@ -228,20 +228,20 @@ ReadImage::Apply(std::vector<cv::Mat> &input, const void *param_ptr) const {
       } else if (img.channels() == 1) {
         converted = img.clone();
       } else {
-        return absl::InvalidArgumentError("Image at index " +
+        return Status::InvalidArgumentError("Image at index " +
                                           std::to_string(i) +
                                           " channel not supported for GRAY.");
       }
       break;
     default:
-      return absl::InvalidArgumentError("Unknown format.");
+      return Status::InvalidArgumentError("Unknown format.");
     }
     output.push_back(std::move(converted));
   }
   return output;
 }
 
-absl::StatusOr<ReadImage::Format>
+StatusOr<ReadImage::Format>
 ReadImage::StringToFormat(const std::string &format) {
   if (format == "BGR")
     return Format::BGR;
@@ -249,20 +249,20 @@ ReadImage::StringToFormat(const std::string &format) {
     return Format::RGB;
   if (format == "GRAY")
     return Format::GRAY;
-  return absl::InvalidArgumentError("Unsupported format: " + format);
+  return Status::InvalidArgumentError("Unsupported format: " + format);
 }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 ToCHWImage::operator()(const std::vector<cv::Mat> &imgs_batch) {
   std::vector<std::vector<cv::Mat>> chw_imgs_batch;
 
   std::vector<cv::Mat> chw_imgs;
   for (const auto &img : imgs_batch) {
     if (img.empty()) {
-      return absl::InvalidArgumentError("Input image is empty!");
+      return Status::InvalidArgumentError("Input image is empty!");
     }
     if (img.channels() != 3) {
-      return absl::InvalidArgumentError(
+      return Status::InvalidArgumentError(
           "Input image must have 3 channels (HWC format)!");
     }
 
@@ -301,15 +301,15 @@ Normalize::Normalize(float scale, const float &mean, const float &std)
   }
 }
 
-absl::StatusOr<cv::Mat> Normalize::NormalizeOne(const cv::Mat &image) const {
+StatusOr<cv::Mat> Normalize::NormalizeOne(const cv::Mat &image) const {
   if (image.empty()) {
-    return absl::InvalidArgumentError("Input image is empty.");
+    return Status::InvalidArgumentError("Input image is empty.");
   }
   if (image.channels() != CHANNEL) {
-    return absl::InvalidArgumentError("Input image must have 3 dims");
+    return Status::InvalidArgumentError("Input image must have 3 dims");
   }
   if (image.depth() != CV_8U && image.depth() != CV_32F) {
-    return absl::InvalidArgumentError("Input image must be CV_8U or CV_32F.");
+    return Status::InvalidArgumentError("Input image must be CV_8U or CV_32F.");
   }
   cv::Mat input;
   if (image.depth() == CV_8U) {
@@ -343,7 +343,7 @@ absl::StatusOr<cv::Mat> Normalize::NormalizeOne(const cv::Mat &image) const {
     return input;
   }
 }
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 Normalize::Apply(std::vector<cv::Mat> &input, const void *param) const {
   std::vector<cv::Mat> results_norm;
   results_norm.reserve(input.size());
@@ -367,15 +367,15 @@ NormalizeImage::NormalizeImage(float scale, const std::vector<float> &mean,
   }
 }
 
-absl::StatusOr<cv::Mat> NormalizeImage::Normalize(const cv::Mat &img) const {
+StatusOr<cv::Mat> NormalizeImage::Normalize(const cv::Mat &img) const {
   if (img.empty()) {
-    return absl::InvalidArgumentError("Input image is empty.");
+    return Status::InvalidArgumentError("Input image is empty.");
   }
   if (img.channels() != CHANNEL) {
-    return absl::InvalidArgumentError("Input image must have 3 channels.");
+    return Status::InvalidArgumentError("Input image must have 3 channels.");
   }
   if (img.depth() != CV_8U && img.depth() != CV_32F) {
-    return absl::InvalidArgumentError("Input image must be CV_8U or CV_32F.");
+    return Status::InvalidArgumentError("Input image must be CV_8U or CV_32F.");
   }
 
   cv::Mat input;
@@ -399,7 +399,7 @@ absl::StatusOr<cv::Mat> NormalizeImage::Normalize(const cv::Mat &img) const {
   return processed;
 }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 NormalizeImage::Apply(std::vector<cv::Mat> &imgs, const void *param) const {
   std::vector<cv::Mat> results;
   results.reserve(imgs.size());
@@ -413,15 +413,15 @@ NormalizeImage::Apply(std::vector<cv::Mat> &imgs, const void *param) const {
   return results;
 }
 
-// absl::StatusOr<std::vector<cv::Mat>> ToCHWImage::Apply(
+// StatusOr<std::vector<cv::Mat>> ToCHWImage::Apply(
 //   std::vector<cv::Mat>& input, const void* param) const {
 //   std::vector<cv::Mat> chw_imgs;
 //   for (const auto& img : input) {
 //     if (img.empty()) {
-//       return absl::InvalidArgumentError("Input image is empty!");
+//       return Status::InvalidArgumentError("Input image is empty!");
 //     }
 //     if (img.channels() != 3) {
-//       return absl::InvalidArgumentError(
+//       return Status::InvalidArgumentError(
 //           "Input image must have 3 channels (HWC format)!");
 //     }
 
@@ -443,15 +443,15 @@ NormalizeImage::Apply(std::vector<cv::Mat> &imgs, const void *param) const {
 //   return chw_imgs;
 // }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 ToCHWImage::Apply(std::vector<cv::Mat> &input, const void *param) const {
   std::vector<cv::Mat> chw_imgs;
   for (const auto &img : input) {
     if (img.empty()) {
-      return absl::InvalidArgumentError("Input image is empty!");
+      return Status::InvalidArgumentError("Input image is empty!");
     }
     if (img.channels() != 3) {
-      return absl::InvalidArgumentError(
+      return Status::InvalidArgumentError(
           "Input image must have 3 channels (HWC format)!");
     }
 
@@ -469,10 +469,10 @@ ToCHWImage::Apply(std::vector<cv::Mat> &input, const void *param) const {
   return chw_imgs;
 }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 ToBatch::operator()(const std::vector<cv::Mat> &imgs) const {
   if (imgs.empty()) {
-    return absl::InvalidArgumentError("Input image vector is empty.");
+    return Status::InvalidArgumentError("Input image vector is empty.");
   }
   const int batch = imgs.size();
   const int rows = imgs[0].rows;
@@ -482,7 +482,7 @@ ToBatch::operator()(const std::vector<cv::Mat> &imgs) const {
   for (size_t i = 0; i < imgs.size(); ++i) {
     if (imgs[i].rows != rows || imgs[i].cols != cols ||
         imgs[i].channels() != channels) {
-      return absl::InvalidArgumentError(
+      return Status::InvalidArgumentError(
           "All images must have the same size and number of channels.");
     }
   }
@@ -524,20 +524,20 @@ ToBatch::operator()(const std::vector<cv::Mat> &imgs) const {
   return result;
 }
 
-absl::StatusOr<std::vector<cv::Mat>> ToBatch::Apply(std::vector<cv::Mat> &input,
+StatusOr<std::vector<cv::Mat>> ToBatch::Apply(std::vector<cv::Mat> &input,
                                                     const void *param) const {
   if (input.empty()) {
-    return absl::InvalidArgumentError("Input image vector is empty.");
+    return Status::InvalidArgumentError("Input image vector is empty.");
   }
 
   std::vector<int> batch_shape = {(int)input.size()};
   for (const auto &image : input) {
     if (image.dims != input[0].dims) {
-      return absl::InvalidArgumentError("All images must have the same dims.");
+      return Status::InvalidArgumentError("All images must have the same dims.");
     } else {
       for (int i = 0; i < input[0].dims; i++) {
         if (image.size[i] != input[0].size[i]) {
-          return absl::InvalidArgumentError(
+          return Status::InvalidArgumentError(
               "All images must have the same size and number of channels.");
         }
         if (&image == &(*std::begin(input)))
@@ -554,13 +554,13 @@ absl::StatusOr<std::vector<cv::Mat>> ToBatch::Apply(std::vector<cv::Mat> &input,
   return out;
 }
 
-absl::StatusOr<cv::Mat> ComponentsProcessor::RotateImage(const cv::Mat &image,
+StatusOr<cv::Mat> ComponentsProcessor::RotateImage(const cv::Mat &image,
                                                          int angle) {
   if (image.empty() || image.channels() != 3) {
-    return absl::InvalidArgumentError("image is invalid");
+    return Status::InvalidArgumentError("image is invalid");
   }
   if (angle < 0 || angle >= 360) {
-    return absl::InvalidArgumentError("`angle` should be in range [0, 360)");
+    return Status::InvalidArgumentError("`angle` should be in range [0, 360)");
   }
   if (std::abs(angle) < 1e-7) {
     return image.clone();
@@ -672,11 +672,11 @@ CropByPolys::CropByPolys(const std::string &box_type) {
   }
 }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 CropByPolys::operator()(const cv::Mat &img,
                         const std::vector<std::vector<cv::Point2f>> &dt_polys) {
   if (img.empty())
-    return absl::InvalidArgumentError("Input image is empty.");
+    return Status::InvalidArgumentError("Input image is empty.");
   std::vector<cv::Mat> output_list;
   try {
     if (box_type_ == DetBoxType::kQuad) {
@@ -694,28 +694,28 @@ CropByPolys::operator()(const cv::Mat &img,
         output_list.push_back(*out);
       }
     } else {
-      return absl::UnimplementedError("Unknown box type.");
+      return Status::InternalError("Unknown box type.");
     }
   } catch (const std::exception &e) {
-    return absl::InternalError(std::string("Exception: ") + e.what());
+    return Status::InternalError(std::string("Exception: ") + e.what());
   }
   return output_list;
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 CropByPolys::GetMinAreaRectCrop(const cv::Mat &img,
                                 const std::vector<cv::Point2f> &points) const {
   if (points.size() < 4)
-    return absl::InvalidArgumentError("Less than 4 points for min area rect.");
+    return Status::InvalidArgumentError("Less than 4 points for min area rect.");
   std::vector<cv::Point2f> box = GetMinAreaRectPoints(points);
   return GetRotateCropImage(img, box);
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 CropByPolys::GetRotateCropImage(const cv::Mat &img,
                                 const std::vector<cv::Point2f> &box) const {
   if (box.size() != 4)
-    return absl::InvalidArgumentError("Box must have 4 points.");
+    return Status::InvalidArgumentError("Box must have 4 points.");
   float widthTop = cv::norm(box[0] - box[1]);
   float widthBottom = cv::norm(box[2] - box[3]);
   float maxWidth = std::max(widthTop, widthBottom);
@@ -767,16 +767,16 @@ CropByPolys::GetMinAreaRectPoints(const std::vector<cv::Point2f> &poly) const {
   return {box[index_a], box[index_b], box[index_c], box[index_d]};
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 CropByPolys::GetPolyRectCrop(const cv::Mat &img,
                              const std::vector<cv::Point2f> &poly) const {
   if (poly.size() < 4)
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "Less than 4 points for GetPolyRectCrop.");
   // 对Poly和最小外接矩形做IoU判断
   std::vector<cv::Point2f> minrect = GetMinAreaRectPoints(poly);
   if (minrect.size() != 4)
-    return absl::InternalError("Failed to get minarea rect.");
+    return Status::InternalError("Failed to get minarea rect.");
   double iou = IoU(poly, minrect);
   // 若IoU>0.7则返回直接crop，否则可做更复杂处理，如透视矫正，可进一步实现自定义变形矫正
   auto crop_result = GetRotateCropImage(img, minrect);
@@ -824,3 +824,4 @@ double CropByPolys::IoU(const std::vector<cv::Point2f> &poly1,
     return 0.0;
   return area_inter / area_union;
 }
+

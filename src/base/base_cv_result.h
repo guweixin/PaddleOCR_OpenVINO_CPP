@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
 
 class ImageWriter {};
 
@@ -31,8 +31,8 @@ public:
   virtual ~BaseCVResult() = default;
   std::string Str() const;
   std::unordered_map<std::string, cv::Mat> Img() const;
-  // absl::Status Print() const;
-  absl::Status SaveToImg() const;
+  // Status Print() const;
+  Status SaveToImg() const;
 
   virtual void SaveToImg(const std::string &save_path) = 0;
   virtual void Print() const = 0;
@@ -44,3 +44,4 @@ protected:
   std::string ToStr() const;
   // virtual std::unordered_map<std::string, cv::Mat> ToImg() const = 0;
 };
+

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,13 +44,13 @@ PaddleInfer::PaddleInfer(const std::string &model_name,
   }
 }
 
-absl::StatusOr<std::shared_ptr<paddle_infer::Predictor>> PaddleInfer::Create() {
+StatusOr<std::shared_ptr<paddle_infer::Predictor>> PaddleInfer::Create() {
   auto model_paths = Utility::GetModelPaths(model_dir_, model_file_prefix_);
   if (!model_paths.ok()) {
     return model_paths.status();
   }
   if (model_paths->find("paddle") == model_paths->end()) {
-    return absl::NotFoundError("No valid PaddlePaddle model found");
+    return Status::NotFoundError("No valid PaddlePaddle model found");
   }
 
   auto result_check = CheckRunMode();
@@ -91,7 +91,6 @@ absl::StatusOr<std::shared_ptr<paddle_infer::Predictor>> PaddleInfer::Create() {
       precision = paddle_infer::PrecisionType::kHalf;
     }
 
-    config.DisableMKLDNN();
     config.EnableUseGpu(100, option_.DeviceId(), precision);
     config.EnableNewIR(option_.EnableNewIR());
     if (option_.EnableNewIR() && option_.EnableCinn()) {
@@ -101,20 +100,13 @@ absl::StatusOr<std::shared_ptr<paddle_infer::Predictor>> PaddleInfer::Create() {
     config.SetOptimizationLevel(3);
   } else if (option_.DeviceType() == "cpu") {
     config.DisableGpu();
-    if (option_.RunMode().find("mkldnn") != std::string::npos) {
-      config.EnableMKLDNN();
-      if (option_.RunMode().find("bf16") != std::string::npos) {
-        config.EnableMkldnnBfloat16();
-      }
-    } else {
-      config.DisableMKLDNN();
-    }
+    // Use OpenBLAS for CPU computation
     config.SetCpuMathLibraryNumThreads(option_.CpuThreads());
     config.EnableNewIR(option_.EnableNewIR());
     config.EnableNewExecutor();
     config.SetOptimizationLevel(3);
   } else {
-    return absl::InvalidArgumentError("Not supported device type: " +
+    return Status::InvalidArgumentError("Not supported device type: " +
                                       option_.DeviceType());
   }
 
@@ -129,7 +121,7 @@ absl::StatusOr<std::shared_ptr<paddle_infer::Predictor>> PaddleInfer::Create() {
   return predictor_shared;
 };
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 PaddleInfer::Apply(const std::vector<cv::Mat> &x) {
   for (size_t i = 0; i < x.size(); ++i) {
     auto &input_handle = input_handles_[i];
@@ -166,7 +158,8 @@ PaddleInfer::Apply(const std::vector<cv::Mat> &x) {
   return pred_outputs;
 };
 
-absl::Status PaddleInfer::CheckRunMode() {
+Status PaddleInfer::CheckRunMode() {
   // Simplified - no MKLDNN checks needed
-  return absl::OkStatus();
+  return Status::OK();
 };
+

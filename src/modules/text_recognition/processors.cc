@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
 #include "src/utils/utility.h"
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 OCRReisizeNormImg::Apply(std::vector<cv::Mat> &input, const void *param) const {
   std::vector<cv::Mat> output = {};
   output.reserve(input.size());
@@ -45,7 +45,7 @@ OCRReisizeNormImg::Apply(std::vector<cv::Mat> &input, const void *param) const {
   return output;
 }
 
-absl::StatusOr<cv::Mat> OCRReisizeNormImg::Resize(cv::Mat &image) const {
+StatusOr<cv::Mat> OCRReisizeNormImg::Resize(cv::Mat &image) const {
   float rec_wh_ratio = (float)rec_image_shape_[2] / (float)rec_image_shape_[1];
   float image_wh_ratio = (float)image.size[1] / (float)image.size[0];
   float max_wh_ratio = std::max(rec_wh_ratio, image_wh_ratio);
@@ -56,7 +56,7 @@ absl::StatusOr<cv::Mat> OCRReisizeNormImg::Resize(cv::Mat &image) const {
   return image_result.value();
 }
 
-absl::StatusOr<cv::Mat> OCRReisizeNormImg::StaticResize(cv::Mat &image) const {
+StatusOr<cv::Mat> OCRReisizeNormImg::StaticResize(cv::Mat &image) const {
   cv::Mat resize_image;
   int img_c = input_shape_[0];
   int img_h = input_shape_[1];
@@ -78,7 +78,7 @@ absl::StatusOr<cv::Mat> OCRReisizeNormImg::StaticResize(cv::Mat &image) const {
   return resize_image_process;
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 OCRReisizeNormImg::ResizeNormImg(cv::Mat &image, float max_wh_ratio) const {
   assert(rec_image_shape_[0] == image.channels());
   int rec_c = rec_image_shape_[0];
@@ -146,7 +146,7 @@ CTCLabelDecode::CTCLabelDecode(const std::vector<std::string> &character_list,
   }
 }
 
-absl::StatusOr<std::vector<std::pair<std::string, float>>>
+StatusOr<std::vector<std::pair<std::string, float>>>
 CTCLabelDecode::Apply(const cv::Mat &preds) const {
   auto preds_batch = Utility::SplitBatch(preds);
   std::vector<std::pair<std::string, float>> ctc_result = {};
@@ -164,7 +164,7 @@ CTCLabelDecode::Apply(const cv::Mat &preds) const {
   return ctc_result;
 }
 
-absl::StatusOr<std::pair<std::string, float>>
+StatusOr<std::pair<std::string, float>>
 CTCLabelDecode::Process(const cv::Mat &pred_data) const {
   std::vector<int> shape_squeeze = {};
   for (int i = 1; i < pred_data.dims; i++) {
@@ -197,7 +197,7 @@ CTCLabelDecode::Process(const cv::Mat &pred_data) const {
   return decode_result.value();
 }
 
-absl::StatusOr<std::pair<std::string, float>>
+StatusOr<std::pair<std::string, float>>
 CTCLabelDecode::Decode(std::list<int> &text_index, std::list<float> &text_prob,
                        bool is_remove_duplicate) const {
   std::vector<bool> selection(text_index.size(), true);
@@ -265,3 +265,4 @@ CTCLabelDecode::Decode(std::list<int> &text_index, std::list<float> &text_prob,
 void CTCLabelDecode::AddSpecialChar() {
   character_list_.insert(character_list_.begin(), "blank");
 }
+

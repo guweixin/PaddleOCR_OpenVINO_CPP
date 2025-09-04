@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ TextRecPredictor::TextRecPredictor(const TextRecPredictorParams &params)
   }
 };
 
-absl::Status TextRecPredictor::Build() {
+Status TextRecPredictor::Build() {
   const auto &pre_params = config_.PreProcessOpInfo();
   Register<ReadImage>("Read", "BGR"); //******
   Register<OCRReisizeNormImg>("ReisizeNorm", params_.input_shape);
@@ -43,7 +43,7 @@ absl::Status TextRecPredictor::Build() {
       new CTCLabelDecode(YamlConfig::SmartParseVector(
                              post_params.at("PostProcess.character_dict"))
                              .vec_string));
-  return absl::OkStatus();
+  return Status::OK();
 };
 
 std::vector<std::unique_ptr<BaseCVResult>>
@@ -103,16 +103,16 @@ TextRecPredictor::Process(std::vector<cv::Mat> &batch_data) {
   return base_cv_result_ptr_vec;
 }
 
-absl::Status TextRecPredictor::CheckRecModelParams() {
+Status TextRecPredictor::CheckRecModelParams() {
   auto result_models_check = Utility::GetOcrModelInfo(
       params_.lang.value_or(""), params_.ocr_version.value_or(""));
   if (!result_models_check.ok()) {
-    return absl::InvalidArgumentError("lang and ocr_version is invaild : " +
+    return Status::InvalidArgumentError("lang and ocr_version is invaild : " +
                                       result_models_check.status().ToString());
   }
   auto result_model_name = ModelName();
   if (!result_model_name.ok()) {
-    return absl::InternalError("Get model name fail : " +
+    return Status::InternalError("Get model name fail : " +
                                result_model_name.status().ToString());
   }
   size_t pos_model_name = result_model_name.value().find('_');
@@ -124,7 +124,7 @@ absl::Status TextRecPredictor::CheckRecModelParams() {
   auto result =
       Utility::GetOcrModelInfo(params_.lang.value_or(""), prefix_model_name);
   if (!result.ok()) {
-    return absl::InternalError("Model and lang do not match : " +
+    return Status::InternalError("Model and lang do not match : " +
                                result.status().ToString());
   }
   if (params_.ocr_version.has_value()) {
@@ -135,18 +135,19 @@ absl::Status TextRecPredictor::CheckRecModelParams() {
 
 #ifdef USE_FREETYPE
   if (!params_.vis_font_dir.has_value()) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "Visualization font path is empty, please provide " +
         std::get<2>(result_models_check.value()) + " path.");
   } else {
     size_t pos = params_.vis_font_dir.value().find_last_of("/\\");
     std::string filename = params_.vis_font_dir.value().substr(pos + 1);
     if (filename != std::get<2>(result_models_check.value())) {
-      return absl::NotFoundError("Expected visualization font is " +
+      return Status::NotFoundError("Expected visualization font is " +
                                  std::get<2>(result_models_check.value()) +
                                  ", but get is " + filename);
     }
   }
 #endif
-  return absl::OkStatus();
+  return Status::OK();
 }
+

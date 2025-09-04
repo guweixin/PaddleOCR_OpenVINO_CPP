@@ -51,67 +51,67 @@ void PrintErrorInfo(const std::string &msg, const std::string &main_mode = "") {
 
 PaddleOCRParams GetPipelineParams() {
   PaddleOCRParams ocr_params;
-  if (!FLAGS_text_detection_model_name.empty()) {
-    ocr_params.text_detection_model_name = FLAGS_text_detection_model_name;
+  if (!text_detection_model_name.empty()) {
+    ocr_params.text_detection_model_name = text_detection_model_name;
   }
-  if (!FLAGS_text_detection_model_dir.empty()) {
-    ocr_params.text_detection_model_dir = FLAGS_text_detection_model_dir;
+  if (!text_detection_model_dir.empty()) {
+    ocr_params.text_detection_model_dir = text_detection_model_dir;
   }
-  if (!FLAGS_text_recognition_model_name.empty()) {
-    ocr_params.text_recognition_model_name = FLAGS_text_recognition_model_name;
+  if (!text_recognition_model_name.empty()) {
+    ocr_params.text_recognition_model_name = text_recognition_model_name;
   }
-  if (!FLAGS_text_recognition_model_dir.empty()) {
-    ocr_params.text_recognition_model_dir = FLAGS_text_recognition_model_dir;
+  if (!text_recognition_model_dir.empty()) {
+    ocr_params.text_recognition_model_dir = text_recognition_model_dir;
   }
-  if (!FLAGS_text_recognition_batch_size.empty()) {
+  if (!text_recognition_batch_size.empty()) {
     ocr_params.text_recognition_batch_size =
-        std::stoi(FLAGS_text_recognition_batch_size);
+        std::stoi(text_recognition_batch_size);
   }
-  if (!FLAGS_text_det_limit_side_len.empty()) {
+  if (!text_det_limit_side_len.empty()) {
     ocr_params.text_det_limit_side_len =
-        std::stoi(FLAGS_text_det_limit_side_len);
+        std::stoi(text_det_limit_side_len);
   }
-  if (!FLAGS_text_det_limit_type.empty()) {
-    ocr_params.text_det_limit_type = FLAGS_text_det_limit_type;
+  if (!text_det_limit_type.empty()) {
+    ocr_params.text_det_limit_type = text_det_limit_type;
   }
-  if (!FLAGS_text_det_thresh.empty()) {
-    ocr_params.text_det_thresh = std::stof(FLAGS_text_det_thresh);
+  if (!text_det_thresh.empty()) {
+    ocr_params.text_det_thresh = std::stof(text_det_thresh);
   }
-  if (!FLAGS_text_det_box_thresh.empty()) {
-    ocr_params.text_det_box_thresh = std::stof(FLAGS_text_det_box_thresh);
+  if (!text_det_box_thresh.empty()) {
+    ocr_params.text_det_box_thresh = std::stof(text_det_box_thresh);
   }
-  if (!FLAGS_text_det_unclip_ratio.empty()) {
-    ocr_params.text_det_unclip_ratio = std::stof(FLAGS_text_det_unclip_ratio);
+  if (!text_det_unclip_ratio.empty()) {
+    ocr_params.text_det_unclip_ratio = std::stof(text_det_unclip_ratio);
   }
-  if (!FLAGS_text_det_input_shape.empty()) {
+  if (!text_det_input_shape.empty()) {
     ocr_params.text_det_input_shape =
-        YamlConfig::SmartParseVector(FLAGS_text_det_input_shape).vec_int;
+        YamlConfig::SmartParseVector(text_det_input_shape).vec_int;
   }
-  if (!FLAGS_text_rec_score_thresh.empty()) {
-    ocr_params.text_rec_score_thresh = std::stof(FLAGS_text_rec_score_thresh);
+  if (!text_rec_score_thresh.empty()) {
+    ocr_params.text_rec_score_thresh = std::stof(text_rec_score_thresh);
   }
-  if (!FLAGS_text_rec_input_shape.empty()) {
+  if (!text_rec_input_shape.empty()) {
     ocr_params.text_rec_input_shape =
-        YamlConfig::SmartParseVector(FLAGS_text_rec_input_shape).vec_int;
+        YamlConfig::SmartParseVector(text_rec_input_shape).vec_int;
   }
-  if (!FLAGS_device.empty()) {
-    ocr_params.device = FLAGS_device;
+  if (!device.empty()) {
+    ocr_params.device = device;
   }
-  if (!FLAGS_precision.empty()) {
-    ocr_params.precision = FLAGS_precision;
+  if (!precision.empty()) {
+    ocr_params.precision = precision;
   }
-  if (!FLAGS_cpu_threads.empty()) {
-    ocr_params.cpu_threads = std::stoi(FLAGS_cpu_threads);
+  if (!cpu_threads.empty()) {
+    ocr_params.cpu_threads = std::stoi(cpu_threads);
   }
-  if (!FLAGS_thread_num.empty()) {
-    ocr_params.thread_num = std::stoi(FLAGS_thread_num);
+  if (!thread_num.empty()) {
+    ocr_params.thread_num = std::stoi(thread_num);
   }
   return ocr_params;
 }
 
 int main(int argc, char *argv[]) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-  if (FLAGS_input.empty()) {
+  parse_args(argc, argv);
+  if (input.empty()) {
     INFOE("Require input, such as ./build/ppocr ocr --input "
           "your_image_path [--param1] [--param2] [...]");
     exit(-1);
@@ -131,12 +131,12 @@ int main(int argc, char *argv[]) {
   }
   
   auto params = GetPipelineParams();
-  auto outputs = PaddleOCR(params).Predict(FLAGS_input);
+  auto outputs = PaddleOCR(params).Predict(input);
   
   for (auto &output : outputs) {
     output->Print();
-    output->SaveToImg(FLAGS_save_path);
-    output->SaveToJson(FLAGS_save_path);
+    output->SaveToImg(save_path);
+    output->SaveToJson(save_path);
   }
   return 0;
 }

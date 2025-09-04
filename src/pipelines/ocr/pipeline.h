@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,11 @@
 
 #include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/types/optional.h"
+#include "src/utils/status.h"
 #include "src/base/base_pipeline.h"
 #include "src/common/image_batch_sampler.h"
 #include "src/common/processors.h"
@@ -55,27 +54,27 @@ struct OCRPipelineResult {
 };
 
 struct OCRPipelineParams {
-  absl::optional<std::string> text_detection_model_name = absl::nullopt;
-  absl::optional<std::string> text_detection_model_dir = absl::nullopt;
-  absl::optional<std::string> text_recognition_model_name = absl::nullopt;
-  absl::optional<std::string> text_recognition_model_dir = absl::nullopt;
-  absl::optional<int> text_recognition_batch_size = absl::nullopt;
-  absl::optional<int> text_det_limit_side_len = absl::nullopt;
-  absl::optional<std::string> text_det_limit_type = absl::nullopt;
-  absl::optional<float> text_det_thresh = absl::nullopt;
-  absl::optional<float> text_det_box_thresh = absl::nullopt;
-  absl::optional<float> text_det_unclip_ratio = absl::nullopt;
-  absl::optional<std::vector<int>> text_det_input_shape = absl::nullopt;
-  absl::optional<float> text_rec_score_thresh = absl::nullopt;
-  absl::optional<std::vector<int>> text_rec_input_shape = absl::nullopt;
-  absl::optional<std::string> lang = absl::nullopt;
-  absl::optional<std::string> ocr_version = absl::nullopt;
-  absl::optional<std::string> vis_font_dir = absl::nullopt;
-  absl::optional<std::string> device = absl::nullopt;
+  std::optional<std::string> text_detection_model_name = std::nullopt;
+  std::optional<std::string> text_detection_model_dir = std::nullopt;
+  std::optional<std::string> text_recognition_model_name = std::nullopt;
+  std::optional<std::string> text_recognition_model_dir = std::nullopt;
+  std::optional<int> text_recognition_batch_size = std::nullopt;
+  std::optional<int> text_det_limit_side_len = std::nullopt;
+  std::optional<std::string> text_det_limit_type = std::nullopt;
+  std::optional<float> text_det_thresh = std::nullopt;
+  std::optional<float> text_det_box_thresh = std::nullopt;
+  std::optional<float> text_det_unclip_ratio = std::nullopt;
+  std::optional<std::vector<int>> text_det_input_shape = std::nullopt;
+  std::optional<float> text_rec_score_thresh = std::nullopt;
+  std::optional<std::vector<int>> text_rec_input_shape = std::nullopt;
+  std::optional<std::string> lang = std::nullopt;
+  std::optional<std::string> ocr_version = std::nullopt;
+  std::optional<std::string> vis_font_dir = std::nullopt;
+  std::optional<std::string> device = std::nullopt;
   std::string precision = "fp32";
   int cpu_threads = 8;
   int thread_num = 1;
-  absl::optional<Utility::PaddleXConfigVariant> paddlex_config = absl::nullopt;
+  std::optional<Utility::PaddleXConfigVariant> paddlex_config = std::nullopt;
 };
 
 class _OCRPipeline : public BasePipeline {
@@ -91,7 +90,7 @@ public:
     return pipeline_result_vec_;
   };
 
-  static absl::StatusOr<std::vector<cv::Mat>>
+  static StatusOr<std::vector<cv::Mat>>
   RotateImage(const std::vector<cv::Mat> &image_array_list,
               const std::vector<int> &rotate_angle_list);
 
@@ -133,3 +132,4 @@ private:
   std::unique_ptr<BasePipeline> infer_;
   std::unique_ptr<BaseBatchSampler> batch_sampler_ptr_;
 };
+

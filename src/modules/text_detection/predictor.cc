@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ TextDetPredictor::TextDetPredictor(const TextDetPredictorParams &params)
   }
 };
 
-absl::Status TextDetPredictor::Build() {
+Status TextDetPredictor::Build() {
   const auto &pre_tfs = config_.PreProcessOpInfo();
   // Register<ReadImage>("Read", pre_tfs.at("DecodeImage.img_mode"));
   Register<ReadImage>("Read");
@@ -63,7 +63,7 @@ absl::Status TextDetPredictor::Build() {
       std::stoi(post_params.at("PostProcess.max_candidates"));
   post_op_["DBPostProcess"] =
       std::unique_ptr<DBPostProcess>(new DBPostProcess(db_param));
-  return absl::OkStatus();
+  return Status::OK();
 };
 
 std::vector<std::unique_ptr<BaseCVResult>>
@@ -136,3 +136,4 @@ TextDetPredictor::Process(std::vector<cv::Mat> &batch_data) {
 
   return base_cv_result_ptr_vec;
 }
+

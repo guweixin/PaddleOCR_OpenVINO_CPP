@@ -1,4 +1,4 @@
-
+﻿
 // Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -86,3 +86,4 @@ void ThreadPool::joinFinishedThreads() {
 }
 
 } // namespace PaddlePool
+

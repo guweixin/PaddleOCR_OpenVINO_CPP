@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,14 @@
 #include <string>
 #include <unordered_map>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
+#include "src/utils/status.h"
 
 class BaseProcessor {
 public:
   BaseProcessor() = default;
   virtual ~BaseProcessor() = default;
-  virtual absl::StatusOr<std::vector<cv::Mat>>
+  virtual StatusOr<std::vector<cv::Mat>>
   Apply(std::vector<cv::Mat> &input, const void *param_ptr = nullptr) const = 0;
 };
+

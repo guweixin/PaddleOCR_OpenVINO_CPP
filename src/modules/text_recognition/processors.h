@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,24 +19,24 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
+#include "src/utils/status.h"
 #include "src/common/processors.h"
 #include "src/utils/func_register.h"
 
 class OCRReisizeNormImg : public BaseProcessor {
 public:
   OCRReisizeNormImg(
-      absl::optional<std::vector<int>> input_shape = absl::nullopt,
+      std::optional<std::vector<int>> input_shape = std::nullopt,
       std::vector<int> rec_image_shape = {3, 48, 320})
       : rec_image_shape_(rec_image_shape),
         input_shape_(input_shape.value_or(std::vector<int>())){};
-  absl::StatusOr<std::vector<cv::Mat>>
+  StatusOr<std::vector<cv::Mat>>
   Apply(std::vector<cv::Mat> &input,
         const void *param = nullptr) const override;
-  absl::StatusOr<cv::Mat> Resize(cv::Mat &image) const;
-  absl::StatusOr<cv::Mat> StaticResize(cv::Mat &image) const;
-  absl::StatusOr<cv::Mat> ResizeNormImg(cv::Mat &image,
+  StatusOr<cv::Mat> Resize(cv::Mat &image) const;
+  StatusOr<cv::Mat> StaticResize(cv::Mat &image) const;
+  StatusOr<cv::Mat> ResizeNormImg(cv::Mat &image,
                                         float max_wh_ratio) const;
   static constexpr int MAX_IMG_W = 3200;
 
@@ -49,11 +49,11 @@ class CTCLabelDecode {
 public:
   CTCLabelDecode(const std::vector<std::string> &character_list = {},
                  bool use_space_char = true);
-  absl::StatusOr<std::vector<std::pair<std::string, float>>>
+  StatusOr<std::vector<std::pair<std::string, float>>>
   Apply(const cv::Mat &preds) const;
-  absl::StatusOr<std::pair<std::string, float>>
+  StatusOr<std::pair<std::string, float>>
   Process(const cv::Mat &pred_data) const;
-  absl::StatusOr<std::pair<std::string, float>>
+  StatusOr<std::pair<std::string, float>>
   Decode(std::list<int> &text_index, std::list<float> &text_prob,
          bool is_remove_duplicate = false) const;
   void AddSpecialChar();
@@ -68,11 +68,11 @@ private:
 
 class ToBatchUniform : public ToBatch {
 public:
-  absl::StatusOr<std::vector<cv::Mat>>
+  StatusOr<std::vector<cv::Mat>>
   Apply(std::vector<cv::Mat> &input,
         const void *param = nullptr) const override {
     if (input.empty()) {
-      return absl::InvalidArgumentError("Input image vector is empty.");
+      return Status::InvalidArgumentError("Input image vector is empty.");
     }
     int numDims = input[0].dims;
     int dtype = input[0].type();
@@ -80,13 +80,13 @@ public:
     int maxWidth = 0;
     for (const auto &img : input) {
       if (img.dims != numDims || img.type() != dtype) {
-        return absl::InvalidArgumentError(
+        return Status::InvalidArgumentError(
             "All images must have the same number of dimensions and data type");
       }
 
       for (int i = 0; i < numDims - 1; ++i) {
         if (img.size[i] != input[0].size[i]) {
-          return absl::InvalidArgumentError(
+          return Status::InvalidArgumentError(
               "All images must have the same dimensions except width");
         }
       }
@@ -123,3 +123,4 @@ public:
     return ToBatch::Apply(paddedImages);
   }
 };
+

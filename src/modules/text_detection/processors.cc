@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,11 +43,11 @@ DetResizeForTest::DetResizeForTest(const DetResizeForTestParam &params) {
   }
 }
 
-absl::StatusOr<std::vector<cv::Mat>>
+StatusOr<std::vector<cv::Mat>>
 DetResizeForTest::Apply(std::vector<cv::Mat> &input,
                         const void *param_ptr) const {
   if (input.empty()) {
-    return absl::InvalidArgumentError("Input image vector is empty.");
+    return Status::InvalidArgumentError("Input image vector is empty.");
   }
   std::vector<cv::Mat> results;
   if (param_ptr != nullptr) {
@@ -77,7 +77,7 @@ DetResizeForTest::Apply(std::vector<cv::Mat> &input,
   return results;
 }
 
-absl::StatusOr<cv::Mat> DetResizeForTest::Resize(const cv::Mat &img,
+StatusOr<cv::Mat> DetResizeForTest::Resize(const cv::Mat &img,
                                                  int limit_side_len,
                                                  const std::string &limit_type,
                                                  int max_side_limit) const {
@@ -100,7 +100,7 @@ absl::StatusOr<cv::Mat> DetResizeForTest::Resize(const cv::Mat &img,
   case 3:
     return ResizeImageType3(img);
   default:
-    return absl::InvalidArgumentError("Unknown resize_type: " +
+    return Status::InvalidArgumentError("Unknown resize_type: " +
                                       std::to_string(resize_type_));
   }
 }
@@ -115,7 +115,7 @@ cv::Mat DetResizeForTest::ImagePadding(const cv::Mat &img, int value) const {
   return im_pad;
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
                                    const std::string &limit_type,
                                    int max_side_limit) const {
@@ -130,7 +130,7 @@ DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
   } else if (limit_type == "resize_long") {
     ratio = float(limit_side_len) / std::max(h, w);
   } else {
-    return absl::InvalidArgumentError("Not supported limit_type: " +
+    return Status::InvalidArgumentError("Not supported limit_type: " +
                                       limit_type);
   }
   int resize_h = int(h * ratio);
@@ -147,13 +147,13 @@ DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
   if (resize_h == h && resize_w == w)
     return img;
   if (resize_h <= 0 || resize_w <= 0)
-    return absl::InvalidArgumentError("resize_w/h <= 0");
+    return Status::InvalidArgumentError("resize_w/h <= 0");
   cv::Mat resized;
   cv::resize(img, resized, cv::Size(resize_w, resize_h));
   return resized;
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType1(const cv::Mat &img) const {
   int resize_h = image_shape_[0];
   int resize_w = image_shape_[1];
@@ -170,7 +170,7 @@ DetResizeForTest::ResizeImageType1(const cv::Mat &img) const {
   return resized;
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType2(const cv::Mat &img) const {
   int h = img.rows, w = img.cols;
   int resize_h = h, resize_w = w;
@@ -194,10 +194,10 @@ DetResizeForTest::ResizeImageType2(const cv::Mat &img) const {
   return resized;
 }
 
-absl::StatusOr<cv::Mat>
+StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType3(const cv::Mat &img) const {
   if (input_shape_.size() != INPUTSHAPE)
-    return absl::InvalidArgumentError("input_shape not set for type " +
+    return Status::InvalidArgumentError("input_shape not set for type " +
                                       std::to_string(INPUTSHAPE));
   int resize_h = input_shape_[1];
   int resize_w = input_shape_[2];
@@ -220,13 +220,13 @@ DBPostProcess::DBPostProcess(const DBPostProcessParams &params)
   assert(box_type_ == "quad" || box_type_ == "poly");
 }
 
-absl::StatusOr<
+StatusOr<
     std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
 DBPostProcess::operator()(const cv::Mat &preds,
                           const std::vector<int> &img_shapes,
-                          absl::optional<float> thresh,
-                          absl::optional<float> box_thresh,
-                          absl::optional<float> unclip_ratio) {
+                          std::optional<float> thresh,
+                          std::optional<float> box_thresh,
+                          std::optional<float> unclip_ratio) {
   std::vector<std::vector<cv::Point2f>> all_boxes;
   std::vector<float> all_scores;
   auto preds_batch = Utility::SplitBatch(preds);
@@ -252,12 +252,12 @@ DBPostProcess::operator()(const cv::Mat &preds,
   return std::make_pair(all_boxes, all_scores);
 }
 
-absl::StatusOr<std::vector<
+StatusOr<std::vector<
     std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>>
 DBPostProcess::Apply(const cv::Mat &preds, const std::vector<int> &img_shapes,
-                     absl::optional<float> thresh,
-                     absl::optional<float> box_thresh,
-                     absl::optional<float> unclip_ratio) {
+                     std::optional<float> thresh,
+                     std::optional<float> box_thresh,
+                     std::optional<float> unclip_ratio) {
   std::vector<
       std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
       db_result = {};
@@ -281,7 +281,7 @@ DBPostProcess::Apply(const cv::Mat &preds, const std::vector<int> &img_shapes,
   return db_result;
 }
 
-absl::StatusOr<
+StatusOr<
     std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
 DBPostProcess::Process(const cv::Mat &pred, const std::vector<int> &img_shape,
                        float thresh, float box_thresh, float unclip_ratio) {
@@ -309,11 +309,11 @@ DBPostProcess::Process(const cv::Mat &pred, const std::vector<int> &img_shape,
                            unclip_ratio);
   }
 
-  return absl::InvalidArgumentError(
+  return Status::InvalidArgumentError(
       "box_type can only be one of ['quad', 'poly']");
 }
 
-absl::StatusOr<
+StatusOr<
     std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
 DBPostProcess::PolygonsFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
                                   int dest_width, int dest_height,
@@ -389,7 +389,7 @@ DBPostProcess::PolygonsFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
   return std::make_pair(boxes, scores);
 }
 
-absl::StatusOr<
+StatusOr<
     std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
 DBPostProcess::BoxesFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
                                int dest_width, int dest_height,
@@ -467,7 +467,7 @@ DBPostProcess::BoxesFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
   return std::make_pair(boxes, scores);
 }
 
-absl::StatusOr<std::vector<cv::Point2f>>
+StatusOr<std::vector<cv::Point2f>>
 DBPostProcess::Unclip(const std::vector<cv::Point2f> &box, float unclip_ratio) {
   float area = cv::contourArea(box);
   float length = cv::arcLength(box, true);
@@ -485,7 +485,7 @@ DBPostProcess::Unclip(const std::vector<cv::Point2f> &box, float unclip_ratio) {
   co.Execute(solution, distance);
 
   if (solution.empty()) {
-    return absl::InternalError("Failed to unclip polygon");
+    return Status::InternalError("Failed to unclip polygon");
   }
 
   std::vector<cv::Point2f> result;
@@ -649,3 +649,4 @@ float DBPostProcess::BoxScoreSlow(const cv::Mat &bitmap,
       bitmap(cv::Rect(xmin, ymin, xmax - xmin + 1, ymax - ymin + 1)), mask);
   return static_cast<float>(mean[0]);
 }
+

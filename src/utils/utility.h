@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
 #ifdef _WIN32
 #include <direct.h>
 #include <io.h>
@@ -66,34 +65,33 @@ public:
   static constexpr const char *MODEL_FILE_PREFIX = "inference";
   static const std::set<std::string> kImgSuffixes;
 
-  static absl::StatusOr<
+  static StatusOr<
       std::map<std::string, std::pair<std::string, std::string>>>
   GetModelPaths(const std::string &model_dir,
                 const std::string &model_file_prefix = MODEL_FILE_PREFIX);
 
-  static absl::StatusOr<std::string>
+  static StatusOr<std::string>
   FindModelPath(const std::string &model_dir, const std::string &model_name);
-  static absl::StatusOr<std::string>
+  static StatusOr<std::string>
   GetConfigPaths(const std::string &model_dir,
                  const std::string &model_file_prefix = MODEL_FILE_PREFIX);
 
-  static absl::StatusOr<std::string>
+  static StatusOr<std::string>
   GetDefaultConfig(std::string pipeline_name);
 
-  static absl::Status FileExists(const std::string &path);
+  static Status FileExists(const std::string &path);
 
-  // TODO windows
-  static bool IsMkldnnAvailable();
+  // OpenBLAS is always available in this configuration
 
   static void PrintShape(const cv::Mat &img);
 
-  static absl::Status MyCreateDirectory(const std::string &path);
-  static absl::Status MyCreatePath(const std::string &path);
-  static absl::Status MyCreateFile(const std::string &filepath);
+  static Status MyCreateDirectory(const std::string &path);
+  static Status MyCreatePath(const std::string &path);
+  static Status MyCreateFile(const std::string &filepath);
 
-  static absl::StatusOr<std::vector<cv::Mat>> SplitBatch(const cv::Mat &batch);
+  static StatusOr<std::vector<cv::Mat>> SplitBatch(const cv::Mat &batch);
 
-  static absl::StatusOr<cv::Mat> MyLoadImage(const std::string &file_path);
+  static StatusOr<cv::Mat> MyLoadImage(const std::string &file_path);
   static bool IsDirectory(const std::string &path);
   static std::string GetFileExtension(const std::string &file_path);
   static void GetFilesRecursive(const std::string &dir_path,
@@ -101,21 +99,22 @@ public:
   static std::string ToLower(const std::string &str);
   static bool IsImageFile(const std::string &file_path);
   static int MakeDir(const std::string &path);
-  static absl::Status CreateDirectoryRecursive(const std::string &path);
-  static absl::Status CreateDirectoryForFile(const std::string &filePath);
-  static absl::StatusOr<std::string>
+  static Status CreateDirectoryRecursive(const std::string &path);
+  static Status CreateDirectoryForFile(const std::string &filePath);
+  static StatusOr<std::string>
   SmartCreateDirectoryForImage(std::string save_path,
                                const std::string &input_path,
                                const std::string &suffix = "_res");
-  static absl::StatusOr<std::string>
+  static StatusOr<std::string>
   SmartCreateDirectoryForJson(const std::string &save_path,
                               const std::string &input_path,
                               const std::string &suffix = "_res");
 
-  static absl::StatusOr<int> StringToInt(std::string s);
+  static StatusOr<int> StringToInt(std::string s);
   static bool StringToBool(const std::string &str);
   static std::string VecToString(const std::vector<int> &input);
 
-  static absl::StatusOr<std::tuple<std::string, std::string, std::string>>
+  static StatusOr<std::tuple<std::string, std::string, std::string>>
   GetOcrModelInfo(std::string lang, std::string ppocr_version);
 };
+

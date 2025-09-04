@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
+#include "src/utils/status.h"
 #include "paddle_inference_api.h"
 #include "src/utils/ilogger.h"
 #include "src/utils/pp_option.h"
@@ -30,7 +30,7 @@ public:
                        const std::string &model_file_prefix,
                        const PaddlePredictorOption &option);
   ~PaddleInfer() = default;
-  absl::StatusOr<std::vector<cv::Mat>>
+  StatusOr<std::vector<cv::Mat>>
   Apply(const std::vector<cv::Mat> &x); //***********
 
 private:
@@ -43,7 +43,8 @@ private:
   std::vector<std::unique_ptr<paddle_infer::Tensor>> input_handles_;
   std::vector<std::unique_ptr<paddle_infer::Tensor>> output_handles_;
 
-  absl::StatusOr<std::shared_ptr<paddle_infer::Predictor>> Create();
+  StatusOr<std::shared_ptr<paddle_infer::Predictor>> Create();
 
-  absl::Status CheckRunMode();
+  Status CheckRunMode();
 };
+

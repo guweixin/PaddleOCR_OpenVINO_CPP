@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "utility.h"
+#include "src/utils/utility.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -21,15 +21,15 @@
 
 #include "ilogger.h"
 
-absl::Status Utility::FileExists(const std::string &path) {
+Status Utility::FileExists(const std::string &path) {
   struct stat st;
   if (stat(path.c_str(), &st) == 0) {
-    return absl::OkStatus();
+    return Status::OK();
   } else {
-    return absl::NotFoundError("File is not exist:" + path);
+    return Status::NotFoundError("File is not exist:" + path);
   }
 }
-absl::StatusOr<std::map<std::string, std::pair<std::string, std::string>>>
+StatusOr<std::map<std::string, std::pair<std::string, std::string>>>
 Utility::GetModelPaths(const std::string &model_dir,
                        const std::string &model_file_prefix) {
   std::map<std::string, std::pair<std::string, std::string>> model_paths;
@@ -46,26 +46,26 @@ Utility::GetModelPaths(const std::string &model_dir,
   } else if (FileExists(pdmodel_path).ok()) {
     model_path = pdmodel_path;
   } else {
-    return absl::NotFoundError(FileExists(json_path).ToString() + " and " +
+    return Status::NotFoundError(FileExists(json_path).ToString() + " and " +
                                FileExists(pdmodel_path).ToString());
   }
 
   if (model_path.empty()) {
-    return absl::NotFoundError(
+    return Status::NotFoundError(
         "No PaddlePaddle model file (.json or .pdmodel) found!");
   }
 
   if (FileExists(params_path).ok()) {
     model_paths["paddle"] = std::make_pair(model_path, params_path);
   } else {
-    return absl::NotFoundError(
+    return Status::NotFoundError(
         "No PaddlePaddle params file (.pdiparams) found!");
   }
 
   return model_paths;
 }
 
-absl::StatusOr<std::string>
+StatusOr<std::string>
 Utility::FindModelPath(const std::string &model_dir,
                        const std::string &model_name) {
   char last_char = model_dir.back();
@@ -80,13 +80,13 @@ Utility::FindModelPath(const std::string &model_dir,
   }
   return model_path;
 }
-absl::StatusOr<std::string>
+StatusOr<std::string>
 Utility::GetDefaultConfig(std::string pipeline_name) {
   std::string current_path = __FILE__;
   for (int i = 0; i < 2; i++) {
     size_t pos = current_path.find_last_of(PATH_SEPARATOR);
     if (pos == std::string::npos) {
-      return absl::NotFoundError("Could not find pipline config yaml :" +
+      return Status::NotFoundError("Could not find pipline config yaml :" +
                                  pipeline_name);
     }
     current_path = current_path.substr(0, pos);
@@ -100,10 +100,10 @@ Utility::GetDefaultConfig(std::string pipeline_name) {
   } else if (FileExists(config_path_yml).ok()) {
     return config_path_yml;
   }
-  return absl::NotFoundError("Could not find pipline config yaml :" +
+  return Status::NotFoundError("Could not find pipline config yaml :" +
                              pipeline_name);
 }
-absl::StatusOr<std::string>
+StatusOr<std::string>
 Utility::GetConfigPaths(const std::string &model_dir,
                         const std::string &model_file_prefix) {
   std::string config_path = "";
@@ -117,41 +117,6 @@ Utility::GetConfigPaths(const std::string &model_dir,
   return config_path;
 };
 
-bool Utility::IsMkldnnAvailable() {
-#ifdef _WIN32
-  SYSTEM_INFO si;
-  GetSystemInfo(&si);
-
-  char cpuBrand[0x40] = {0};
-  int cpuInfo[4] = {0};
-  __cpuid(cpuInfo, 0x80000002);
-  memcpy(cpuBrand, cpuInfo, sizeof(cpuInfo));
-  __cpuid(cpuInfo, 0x80000003);
-  memcpy(cpuBrand + 16, cpuInfo, sizeof(cpuInfo));
-  __cpuid(cpuInfo, 0x80000004);
-  memcpy(cpuBrand + 32, cpuInfo, sizeof(cpuInfo));
-  std::string brandStr(cpuBrand);
-  if (brandStr.find("Intel") != std::string::npos) {
-    return true;
-  }
-  return false;
-#else
-  std::ifstream cpuinfo("/proc/cpuinfo");
-  std::string line;
-  while (std::getline(cpuinfo, line)) {
-    if (line.find("vendor_id") != std::string::npos) {
-      auto pos = line.find(":");
-      if (pos != std::string::npos) {
-        if (line.substr(pos + 2).find("Intel") != std::string::npos) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-#endif
-};
-
 void Utility::PrintShape(const cv::Mat &img) {
   for (int i = 0; i < img.dims; i++) {
     std::cout << img.size[i] << " ";
@@ -159,22 +124,22 @@ void Utility::PrintShape(const cv::Mat &img) {
   std::cout << std::endl;
 }
 
-absl::Status Utility::MyCreateDirectory(const std::string &path) {
+Status Utility::MyCreateDirectory(const std::string &path) {
 #ifdef _WIN32
   int ret = _mkdir(path.c_str());
 #else
   int ret = mkdir(path.c_str(), 0755);
 #endif
   if (ret == 0) {
-    return absl::OkStatus();
+    return Status::OK();
   }
   if (errno == EEXIST) {
-    return absl::OkStatus();
+    return Status::OK();
   }
-  return absl::ErrnoToStatus(errno, "Failed to create directory: " + path);
+  return Status::ErrnoToStatus(errno, "Failed to create directory: " + path);
 }
 
-absl::Status Utility::MyCreatePath(const std::string &path) {
+Status Utility::MyCreatePath(const std::string &path) {
   std::vector<std::string> paths;
   std::string tmp;
   for (size_t i = 0; i < path.size(); ++i) {
@@ -189,36 +154,36 @@ absl::Status Utility::MyCreatePath(const std::string &path) {
   std::string current;
   for (size_t i = 0; i < paths.size(); ++i) {
     current += paths[i];
-    absl::Status status = MyCreateDirectory(current);
+    Status status = MyCreateDirectory(current);
     if (!status.ok()) {
       return status;
     }
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status Utility::MyCreateFile(const std::string &filepath) {
+Status Utility::MyCreateFile(const std::string &filepath) {
   std::ifstream infile(filepath.c_str());
   if (infile.good()) {
-    return absl::OkStatus();
+    return Status::OK();
   }
 
   std::ofstream outfile(filepath.c_str(), std::ios::out | std::ios::trunc);
   if (!outfile.is_open()) {
-    return absl::InternalError("Failed to create file: " + filepath);
+    return Status::InternalError("Failed to create file: " + filepath);
   }
 
   outfile.close();
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::StatusOr<std::vector<cv::Mat>> Utility::SplitBatch(const cv::Mat &batch) {
+StatusOr<std::vector<cv::Mat>> Utility::SplitBatch(const cv::Mat &batch) {
   if (batch.dims < 1) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "Input batch must have at least 1 dimension.");
   }
   if (batch.type() != CV_32F) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "Input batch must have CV_32F element type.");
   }
 
@@ -296,10 +261,10 @@ bool Utility::IsImageFile(const std::string &file_path) {
   return kImgSuffixes.find(lower_ext) != kImgSuffixes.end();
 }
 
-absl::StatusOr<cv::Mat> Utility::MyLoadImage(const std::string &file_path) {
+StatusOr<cv::Mat> Utility::MyLoadImage(const std::string &file_path) {
   cv::Mat image = cv::imread(file_path, cv::IMREAD_COLOR);
   if (image.empty()) {
-    return absl::InvalidArgumentError("Failed to load image: " + file_path);
+    return Status::InvalidArgumentError("Failed to load image: " + file_path);
   }
   return image;
 }
@@ -312,9 +277,9 @@ int Utility::MakeDir(const std::string &path) {
 #endif
 }
 
-absl::Status Utility::CreateDirectoryRecursive(const std::string &path) {
+Status Utility::CreateDirectoryRecursive(const std::string &path) {
   if (path.empty()) {
-    return absl::InvalidArgumentError("Path cannot be empty");
+    return Status::InvalidArgumentError("Path cannot be empty");
   }
 
   size_t pos = 0;
@@ -331,7 +296,7 @@ absl::Status Utility::CreateDirectoryRecursive(const std::string &path) {
 
     if (!subdir.empty() && ACCESS(subdir.c_str(), F_OK) != 0) {
       if (MakeDir(subdir) != 0) {
-        return absl::InternalError("Failed to create directory: " + subdir);
+        return Status::InternalError("Failed to create directory: " + subdir);
       }
     }
 
@@ -339,22 +304,22 @@ absl::Status Utility::CreateDirectoryRecursive(const std::string &path) {
       break;
     }
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status Utility::CreateDirectoryForFile(const std::string &filePath) {
+Status Utility::CreateDirectoryForFile(const std::string &filePath) {
   size_t found = filePath.find_last_of(PATH_SEPARATOR);
   if (found != std::string::npos) {
     std::string dirPath = filePath.substr(0, found);
     if (!CreateDirectoryRecursive(dirPath).ok()) {
-      return absl::InternalError("Failed to create file: " + filePath);
+      return Status::InternalError("Failed to create file: " + filePath);
       ;
     }
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::StatusOr<std::string>
+StatusOr<std::string>
 Utility::SmartCreateDirectoryForImage(std::string save_path,
                                       const std::string &input_path,
                                       const std::string &suffix) {
@@ -387,7 +352,7 @@ Utility::SmartCreateDirectoryForImage(std::string save_path,
   return full_path;
 }
 
-absl::StatusOr<std::string>
+StatusOr<std::string>
 Utility::SmartCreateDirectoryForJson(const std::string &save_path,
                                      const std::string &input_path,
                                      const std::string &suffix) {
@@ -402,14 +367,14 @@ Utility::SmartCreateDirectoryForJson(const std::string &save_path,
   return full_path.value();
 }
 
-absl::StatusOr<int> Utility::StringToInt(std::string s) {
+StatusOr<int> Utility::StringToInt(std::string s) {
   std::regex pattern("(\\d+)");
   std::smatch match;
   if (std::regex_search(s, match, pattern)) {
     int value = std::stoi(match[1]);
     return value;
   } else {
-    return absl::NotFoundError("Could not find int !");
+    return Status::NotFoundError("Could not find int !");
   }
 }
 
@@ -434,7 +399,7 @@ std::string Utility::VecToString(const std::vector<int> &input) {
   return result;
 }
 
-absl::StatusOr<std::tuple<std::string, std::string, std::string>>
+StatusOr<std::tuple<std::string, std::string, std::string>>
 Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
   // Font constants
   const static std::string PINGFANG_FONT = "PingFang-SC-Regular.ttf";
@@ -475,7 +440,7 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
   // Validate input parameters
   if (!ppocr_version.empty() &&
       SUPPORT_PPOCR_VERSION.count(ppocr_version) == 0) {
-    return absl::InvalidArgumentError("Unsupported ppocr_version: " +
+    return Status::InvalidArgumentError("Unsupported ppocr_version: " +
                                       ppocr_version);
   }
 
@@ -496,7 +461,7 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
   }();
 
   if (supported_langs.count(lang) == 0) {
-    return absl::InvalidArgumentError("Unsupported lang: " + lang);
+    return Status::InvalidArgumentError("Unsupported lang: " + lang);
   }
 
   // Determine default ppocr_version if not specified
@@ -518,7 +483,7 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
       if (v3_langs.count(lang)) {
         ppocr_version = "PP-OCRv3";
       } else {
-        return absl::InvalidArgumentError(
+        return Status::InvalidArgumentError(
             "Invalid lang and ocr_version combination!");
       }
     }
@@ -562,7 +527,7 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
       rec_model_name = "en_PP-OCRv4_mobile_rec";
       font_name = SIMFANG_FONT;
     } else {
-      return absl::InvalidArgumentError(
+      return Status::InvalidArgumentError(
           "PP-OCRv4 only support ch and en languages!");
     }
   } else { // PP-OCRv3
@@ -602,7 +567,7 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
   }
 
   if (rec_model_name.empty()) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "Invalid lang and ocr_version combination!");
   }
 
@@ -610,3 +575,4 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
 }
 const std::set<std::string> Utility::kImgSuffixes = {"jpg", "png", "jpeg",
                                                      "bmp"};
+

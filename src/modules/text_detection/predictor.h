@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,21 +28,19 @@ struct TextDetPredictorResult {
 };
 
 struct TextDetPredictorParams {
-  absl::optional<std::string> model_name = absl::nullopt;
-  absl::optional<std::string> model_dir = absl::nullopt;
-  absl::optional<std::string> device = absl::nullopt;
+  std::optional<std::string> model_name = std::nullopt;
+  std::optional<std::string> model_dir = std::nullopt;
+  std::optional<std::string> device = std::nullopt;
   std::string precision = "fp32";
-  bool enable_mkldnn = true;
-  int mkldnn_cache_capacity = 10;
   int cpu_threads = 8;
   int batch_size = 1;
-  absl::optional<int> limit_side_len = absl::nullopt;
-  absl::optional<std::string> limit_type = absl::nullopt;
-  absl::optional<int> max_side_limit = absl::nullopt;
-  absl::optional<float> thresh = absl::nullopt;
-  absl::optional<float> box_thresh = absl::nullopt;
-  absl::optional<float> unclip_ratio = absl::nullopt;
-  absl::optional<std::vector<int>> input_shape = absl::nullopt;
+  std::optional<int> limit_side_len = std::nullopt;
+  std::optional<std::string> limit_type = std::nullopt;
+  std::optional<int> max_side_limit = std::nullopt;
+  std::optional<float> thresh = std::nullopt;
+  std::optional<float> box_thresh = std::nullopt;
+  std::optional<float> unclip_ratio = std::nullopt;
+  std::optional<std::vector<int>> input_shape = std::nullopt;
 };
 
 class TextDetPredictor : public BasePredictor {
@@ -55,7 +53,7 @@ public:
 
   void ResetResult() override { predictor_result_vec_.clear(); };
 
-  absl::Status Build();
+  Status Build();
 
   std::vector<std::unique_ptr<BaseCVResult>>
   Process(std::vector<cv::Mat> &batch_data) override;
@@ -67,3 +65,4 @@ private:
   std::unique_ptr<PaddleInfer> infer_ptr_;
   int input_index_ = 0;
 };
+

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,8 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
+#include "src/utils/status.h"
 #include "base_cv_result.h"
 #include "base_predictor.h"
 
@@ -58,3 +58,4 @@ std::unique_ptr<BasePipeline> BasePipeline::CreatePipeline(Args &&...args) {
       std::unique_ptr<T>(new T(std::forward<Args>(args)...));
   return base_pipeline;
 }
+

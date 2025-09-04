@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ const std::set<std::string> ImageBatchSampler::kImgSuffixes = {"jpg", "png",
 ImageBatchSampler::ImageBatchSampler(int batch_size)
     : BaseBatchSampler(batch_size) {}
 
-absl::StatusOr<std::vector<std::vector<cv::Mat>>>
+StatusOr<std::vector<std::vector<cv::Mat>>>
 ImageBatchSampler::SampleFromString(const std::string &input) {
   std::vector<std::string> inputs = {input};
   return SampleFromVector(inputs);
 }
 
-absl::StatusOr<std::vector<std::vector<cv::Mat>>>
+StatusOr<std::vector<std::vector<cv::Mat>>>
 ImageBatchSampler::SampleFromVector(const std::vector<std::string> &inputs) {
   std::vector<std::vector<cv::Mat>> results;
   std::vector<cv::Mat> current_batch;
@@ -45,14 +45,14 @@ ImageBatchSampler::SampleFromVector(const std::vector<std::string> &inputs) {
     const std::string &input = inputs[i];
 
     if (Utility::IsDirectory(input)) {
-      absl::StatusOr<std::vector<std::string>> files_result =
+      StatusOr<std::vector<std::string>> files_result =
           GetFilesList(input);
       if (!files_result.ok()) {
         return files_result.status();
       }
       input_path_.insert(input_path_.end(), files_result.value().begin(),
                          files_result.value().end());
-      absl::StatusOr<std::vector<std::vector<cv::Mat>>> sub_result =
+      StatusOr<std::vector<std::vector<cv::Mat>>> sub_result =
           SampleFromVector(files_result.value());
       if (!sub_result.ok()) {
         return sub_result.status();
@@ -64,10 +64,10 @@ ImageBatchSampler::SampleFromVector(const std::vector<std::string> &inputs) {
       }
     } else if (Utility::IsImageFile(input)) {
       if (!Utility::FileExists(input).ok()) {
-        return absl::NotFoundError("File not found: " + input);
+        return Status::NotFoundError("File not found: " + input);
       }
       input_path_.push_back(input);
-      absl::StatusOr<cv::Mat> image_result = Utility::MyLoadImage(input);
+      StatusOr<cv::Mat> image_result = Utility::MyLoadImage(input);
       if (!image_result.ok()) {
         return image_result.status();
       }
@@ -79,7 +79,7 @@ ImageBatchSampler::SampleFromVector(const std::vector<std::string> &inputs) {
         current_batch.clear();
       }
     } else {
-      return absl::InvalidArgumentError("Unsupported file type: " + input);
+      return Status::InvalidArgumentError("Unsupported file type: " + input);
     }
   }
 
@@ -89,7 +89,7 @@ ImageBatchSampler::SampleFromVector(const std::vector<std::string> &inputs) {
   return results;
 }
 
-absl::StatusOr<std::vector<std::vector<cv::Mat>>>
+StatusOr<std::vector<std::vector<cv::Mat>>>
 ImageBatchSampler::SampleFromMatVector(const std::vector<cv::Mat> &inputs) {
   std::vector<std::vector<cv::Mat>> results;
   std::vector<cv::Mat> current_batch;
@@ -98,7 +98,7 @@ ImageBatchSampler::SampleFromMatVector(const std::vector<cv::Mat> &inputs) {
     const cv::Mat &image = inputs[i];
 
     if (image.empty()) {
-      return absl::InvalidArgumentError("Input image at index " +
+      return Status::InvalidArgumentError("Input image at index " +
                                         std::to_string(i) + " is empty.");
     }
 
@@ -116,3 +116,4 @@ ImageBatchSampler::SampleFromMatVector(const std::vector<cv::Mat> &inputs) {
 
   return results;
 }
+

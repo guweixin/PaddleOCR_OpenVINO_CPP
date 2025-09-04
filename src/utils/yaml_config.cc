@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,15 @@
 #include <iostream>
 #include <sstream>
 
-#include "absl/strings/str_cat.h"
 #include "src/utils/ilogger.h"
+
+// 简单的字符串连接函数，替代 absl::StrCat
+template<typename... Args>
+std::string StrCat(const Args&... args) {
+    std::ostringstream oss;
+    (oss << ... << args);
+    return oss.str();
+}
 
 YamlConfig::YamlConfig(const std::string &model_dir) {
   auto status_get = GetConfigYamlPaths(model_dir);
@@ -35,11 +42,11 @@ YamlConfig::YamlConfig(const std::string &model_dir) {
   Init();
 }
 
-absl::Status YamlConfig::GetConfigYamlPaths(const std::string &model_dir) {
+Status YamlConfig::GetConfigYamlPaths(const std::string &model_dir) {
   if (Utility::GetFileExtension(model_dir) == "yaml" ||
       Utility::GetFileExtension(model_dir) == "yml") {
     config_yaml_path_ = model_dir;
-    return absl::OkStatus();
+    return Status::OK();
   }
   std::string config_path_yml =
       model_dir + "/" + Utility::MODEL_FILE_PREFIX + ".yml";
@@ -47,30 +54,30 @@ absl::Status YamlConfig::GetConfigYamlPaths(const std::string &model_dir) {
       model_dir + "/" + Utility::MODEL_FILE_PREFIX + ".yaml";
   if (Utility::FileExists(config_path_yml).ok()) {
     config_yaml_path_ = config_path_yml;
-    return absl::OkStatus();
+    return Status::OK();
   } else if (Utility::FileExists(config_path_yaml).ok()) {
     config_yaml_path_ = config_path_yaml;
-    return absl::OkStatus();
+    return Status::OK();
   } else {
-    return absl::NotFoundError("file is not exist!");
+    return Status::NotFoundError("file is not exist!");
   }
 };
 
-absl::Status YamlConfig::LoadYamlFile() {
+Status YamlConfig::LoadYamlFile() {
   try {
     YAML::Node config = YAML::LoadFile(config_yaml_path_);
     ParseNode(config);
-    return absl::OkStatus();
+    return Status::OK();
   } catch (const YAML::BadFile &e) {
-    return absl::NotFoundError(
-        absl::StrCat("Failed to open YAML file: ", config_yaml_path_));
+    return Status::NotFoundError(
+        StrCat("Failed to open YAML file: ", config_yaml_path_));
   } catch (const YAML::ParserException &e) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Failed to parse YAML file: ", e.what()));
+    return Status::InvalidArgumentError(
+        StrCat("Failed to parse YAML file: ", e.what()));
   } catch (const YAML::Exception &e) {
-    return absl::InternalError(absl::StrCat("YAML error: ", e.what()));
+    return Status::InternalError(StrCat("YAML error: ", e.what()));
   } catch (const std::exception &e) {
-    return absl::InternalError(absl::StrCat("Unexpected error: ", e.what()));
+    return Status::InternalError(StrCat("Unexpected error: ", e.what()));
   }
 }
 
@@ -179,7 +186,7 @@ void YamlConfig::ParseNode(const YAML::Node &node, const std::string &prefix) {
   }
 }
 
-absl::StatusOr<std::string>
+StatusOr<std::string>
 YamlConfig::GetString(const std::string &key,
                       const std::string &default_value) const {
   for (const auto &info : data_) {
@@ -190,13 +197,13 @@ YamlConfig::GetString(const std::string &key,
   return default_value;
 }
 
-absl::StatusOr<int> YamlConfig::GetInt(const std::string &key,
+StatusOr<int> YamlConfig::GetInt(const std::string &key,
                                        int default_value) const {
   for (const auto &info : data_) {
     if (info.first.find(key) != std::string::npos) {
       for (int i = 0; i < info.second.size(); i++) {
         if (!std::isdigit(static_cast<uchar>(info.second[i]))) {
-          return absl::InvalidArgumentError("the " + key + " is not int type");
+          return Status::InvalidArgumentError("the " + key + " is not int type");
         }
       }
       return std::stoi(info.second);
@@ -205,7 +212,7 @@ absl::StatusOr<int> YamlConfig::GetInt(const std::string &key,
   return default_value;
 }
 
-absl::StatusOr<float> YamlConfig::GetFloat(const std::string &key,
+StatusOr<float> YamlConfig::GetFloat(const std::string &key,
                                            float default_value) const {
   for (const auto &info : data_) {
     if (info.first.find(key) != std::string::npos) {
@@ -217,23 +224,23 @@ absl::StatusOr<float> YamlConfig::GetFloat(const std::string &key,
   return default_value;
 }
 
-absl::StatusOr<double> YamlConfig::GetDouble(const std::string &key) const {
+StatusOr<double> YamlConfig::GetDouble(const std::string &key) const {
   auto it = data_.find(key);
   if (it == data_.end()) {
-    return absl::NotFoundError(absl::StrCat("Key not found: ", key));
+    return Status::NotFoundError(StrCat("Key not found: ", key));
   }
   try {
     return std::stod(it->second);
   } catch (const std::invalid_argument &) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid double value for key '", key, "': ", it->second));
+    return Status::InvalidArgumentError(
+        StrCat("Invalid double value for key '", key, "': ", it->second));
   } catch (const std::out_of_range &) {
-    return absl::OutOfRangeError(absl::StrCat(
+    return Status::InternalError(StrCat(
         "Double value out of range for key '", key, "': ", it->second));
   }
 }
 
-absl::StatusOr<bool> YamlConfig::GetBool(const std::string &key,
+StatusOr<bool> YamlConfig::GetBool(const std::string &key,
                                          bool default_value) const {
   for (const auto &info : data_) {
     if (info.first.find(key) != std::string::npos) {
@@ -242,13 +249,13 @@ absl::StatusOr<bool> YamlConfig::GetBool(const std::string &key,
       } else if (Utility::ToLower(info.second) == "false") {
         return false;
       } else {
-        return absl::InvalidArgumentError("the " + key + " is not bool type");
+        return Status::InvalidArgumentError("the " + key + " is not bool type");
       }
     }
   }
   return default_value;
 }
-absl::StatusOr<std::unordered_map<std::string, std::string>>
+StatusOr<std::unordered_map<std::string, std::string>>
 YamlConfig::GetSubModule(const std::string &key) const {
   std::unordered_map<std::string, std::string> submodule_result = {};
   for (const auto &info : data_) {
@@ -257,41 +264,41 @@ YamlConfig::GetSubModule(const std::string &key) const {
     }
   }
   if (submodule_result.empty()) {
-    return absl::NotFoundError("the " + key + " is not exits!");
+    return Status::NotFoundError("the " + key + " is not exits!");
   }
   return submodule_result;
 }
-absl::Status YamlConfig::HasKey(const std::string &key) const {
+Status YamlConfig::HasKey(const std::string &key) const {
   if (data_.find(key) != data_.end()) {
-    return absl::OkStatus();
+    return Status::OK();
   }
-  return absl::NotFoundError(absl::StrCat("Key not found: ", key));
+  return Status::NotFoundError(StrCat("Key not found: ", key));
 }
 
-absl::Status YamlConfig::PrintAll() const {
+Status YamlConfig::PrintAll() const {
   for (const auto &it : data_) {
     std::cout << it.first << ": " << it.second << std::endl;
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status YamlConfig::PrintWithPrefix(const std::string &prefix) const {
+Status YamlConfig::PrintWithPrefix(const std::string &prefix) const {
   for (const auto &it : data_) {
     if (it.first.find(prefix) == 0) {
       std::cout << it.first << ": " << it.second << std::endl;
     }
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status YamlConfig::FindPreProcessOp(const std::string &prefix) const {
+Status YamlConfig::FindPreProcessOp(const std::string &prefix) const {
   std::unordered_map<std::string, std::string> pre_process_op_info{};
   for (const auto &it : data_) {
     if (it.first.find(prefix) == 0) {
       std::cout << it.first << ": " << it.second << std::endl;
     }
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
 VectorVariant YamlConfig::SmartParseVector(const std::string &input) {
@@ -395,12 +402,13 @@ VectorVariant YamlConfig::SmartParseVector(const std::string &input) {
   return result;
 }
 
-absl::StatusOr<std::pair<std::string, std::string>>
+StatusOr<std::pair<std::string, std::string>>
 YamlConfig::FindKey(const std::string &key) {
   for (const auto &info : data_) {
     if (info.first.find(key) != std::string::npos) {
       return info;
     }
   }
-  return absl::NotFoundError("Could find key " + key);
+  return Status::NotFoundError("Could find key " + key);
 }
+

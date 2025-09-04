@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -348,7 +348,7 @@ void OCRResult::SaveToJson(const std::string &save_path) const {
                  });
   j["rec_boxes"] = int_vec;
 
-  absl::StatusOr<std::string> full_path;
+  StatusOr<std::string> full_path;
   if (pipeline_result_.input_path.empty()) {
     INFOW("Input path is empty, will use output_res.json instead!");
     full_path = Utility::SmartCreateDirectoryForJson(save_path, "output");
@@ -482,3 +482,4 @@ void OCRResult::Print() const {
   PrintRecBoxes(pipeline_result_.rec_boxes);
   std::cout << "\n}" << std::endl;
 }
+

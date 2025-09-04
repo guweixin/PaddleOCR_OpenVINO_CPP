@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,14 +36,14 @@ void PaddleOCR::CreatePipeline() {
       new OCRPipeline(ToOCRPipelineParams(params_)));
 }
 
-absl::Status PaddleOCR::CheckParams() {
+Status PaddleOCR::CheckParams() {
   if (!params_.text_detection_model_dir.has_value()) {
-    return absl::NotFoundError("Require text detection model dir.");
+    return Status::NotFoundError("Require text detection model dir.");
   }
   if (!params_.text_recognition_model_dir.has_value()) {
-    return absl::NotFoundError("Require text recognition model_dir.");
+    return Status::NotFoundError("Require text recognition model_dir.");
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
 OCRPipelineParams PaddleOCR::ToOCRPipelineParams(const PaddleOCRParams &from) {
@@ -71,3 +71,4 @@ OCRPipelineParams PaddleOCR::ToOCRPipelineParams(const PaddleOCRParams &from) {
   COPY_PARAMS(paddlex_config)
   return to;
 }
+

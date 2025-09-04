@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,15 +18,15 @@
 #include "src/utils/utility.h"
 int BaseBatchSampler::BatchSize() const { return batch_size_; }
 
-absl::Status BaseBatchSampler::SetBatchSize(int batch_size) {
+Status BaseBatchSampler::SetBatchSize(int batch_size) {
   if (batch_size <= 0) {
-    return absl::InvalidArgumentError("Batch size must be greater than 0");
+    return Status::InvalidArgumentError("Batch size must be greater than 0");
   }
   batch_size_ = batch_size;
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::StatusOr<std::vector<std::vector<std::string>>>
+StatusOr<std::vector<std::vector<std::string>>>
 BaseBatchSampler::SampleFromVectorToStringVector(
     const std::vector<std::string> &inputs) {
   std::vector<std::vector<std::string>> result;
@@ -36,13 +36,13 @@ BaseBatchSampler::SampleFromVectorToStringVector(
     const std::string &input = inputs[i];
 
     if (Utility::IsDirectory(input)) {
-      absl::StatusOr<std::vector<std::string>> files_result =
+      StatusOr<std::vector<std::string>> files_result =
           GetFilesList(input);
       if (!files_result.ok()) {
         return files_result.status();
       }
 
-      absl::StatusOr<std::vector<std::vector<std::string>>> sub_result =
+      StatusOr<std::vector<std::vector<std::string>>> sub_result =
           SampleFromVectorToStringVector(files_result.value());
       if (!sub_result.ok()) {
         return sub_result.status();
@@ -55,7 +55,7 @@ BaseBatchSampler::SampleFromVectorToStringVector(
       }
     } else if (Utility::IsImageFile(input)) {
       if (!Utility::FileExists(input).ok()) {
-        return absl::NotFoundError("File not found: " + input);
+        return Status::NotFoundError("File not found: " + input);
       }
       current_batch.push_back(input);
 
@@ -64,7 +64,7 @@ BaseBatchSampler::SampleFromVectorToStringVector(
         current_batch.clear();
       }
     } else {
-      return absl::InvalidArgumentError("Unsupported file type: " + input);
+      return Status::InvalidArgumentError("Unsupported file type: " + input);
     }
   }
 
@@ -75,16 +75,16 @@ BaseBatchSampler::SampleFromVectorToStringVector(
   return result;
 }
 
-absl::StatusOr<std::vector<std::vector<std::string>>>
+StatusOr<std::vector<std::vector<std::string>>>
 BaseBatchSampler::SampleFromStringToStringVector(const std::string &input) {
   std::vector<std::string> inputs = {input};
   return SampleFromVectorToStringVector(inputs);
 }
 
-absl::StatusOr<std::vector<std::string>>
+StatusOr<std::vector<std::string>>
 BaseBatchSampler::GetFilesList(const std::string &path) {
   if (!Utility::FileExists(path).ok()) {
-    return absl::NotFoundError("Path not found: " + path);
+    return Status::NotFoundError("Path not found: " + path);
   }
 
   std::vector<std::string> file_list;
@@ -98,9 +98,10 @@ BaseBatchSampler::GetFilesList(const std::string &path) {
   }
 
   if (file_list.empty()) {
-    return absl::NotFoundError("No image files found in path: " + path);
+    return Status::NotFoundError("No image files found in path: " + path);
   }
 
   std::sort(file_list.begin(), file_list.end());
   return file_list;
 }
+

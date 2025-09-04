@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ void TextRecResult::SaveToImg(const std::string &save_path) {
   ft2->putText(new_image, text, org, font, cv::Scalar(0, 0, 0), -1, cv::LINE_AA,
                true);
 
-  absl::StatusOr<std::string> full_path;
+  StatusOr<std::string> full_path;
   if (predictor_result_.input_path.empty()) {
     auto now = std::chrono::system_clock::now();
     auto now_time = std::chrono::system_clock::to_time_t(now);
@@ -136,3 +136,4 @@ void TextRecResult::SaveToJson(const std::string &save_path) const {
     exit(-1);
   }
 }
+

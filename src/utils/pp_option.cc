@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
 
 const std::string &PaddlePredictorOption::RunMode() const { return run_mode_; }
 
@@ -48,45 +48,45 @@ PaddlePredictorOption::GetSupportDevice() const {
   return SUPPORT_DEVICE;
 }
 
-absl::Status PaddlePredictorOption::SetRunMode(const std::string &run_mode) {
+Status PaddlePredictorOption::SetRunMode(const std::string &run_mode) {
   if (std::find(SUPPORT_RUN_MODE.begin(), SUPPORT_RUN_MODE.end(), run_mode) ==
       SUPPORT_RUN_MODE.end()) {
-    return absl::InvalidArgumentError("Unsupported run_mode: " + run_mode);
+    return Status::InvalidArgumentError("Unsupported run_mode: " + run_mode);
   }
   run_mode_ = run_mode;
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status
+Status
 PaddlePredictorOption::SetDeviceType(const std::string &device_type) {
   if (std::find(SUPPORT_DEVICE.begin(), SUPPORT_DEVICE.end(), device_type) ==
       SUPPORT_DEVICE.end()) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "SetDeviceType failed! Unsupported device_type: " + device_type);
   }
   device_type_ = device_type;
   if (device_type_ == "cpu") {
     device_id_ = 0;
   }
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status PaddlePredictorOption::SetDeviceId(int device_id) {
+Status PaddlePredictorOption::SetDeviceId(int device_id) {
   if (device_id < 0) {
-    return absl::InvalidArgumentError(
+    return Status::InvalidArgumentError(
         "SetDeviceId failed! device_id must be >= 0");
   }
   device_id_ = device_id;
-  return absl::OkStatus();
+  return Status::OK();
 }
 
-absl::Status PaddlePredictorOption::SetCpuThreads(int cpu_threads) {
+Status PaddlePredictorOption::SetCpuThreads(int cpu_threads) {
   if (cpu_threads < 1) {
     throw std::invalid_argument(
         "SetCpuThreads failed! cpu_threads must be >= 1");
   }
   cpu_threads_ = cpu_threads;
-  return absl::OkStatus();
+  return Status::OK();
 }
 
 void PaddlePredictorOption::SetDeletePass(
@@ -119,3 +119,4 @@ std::string PaddlePredictorOption::DebugString() const {
       << "enable_cinn: " << (enable_cinn_ ? "true" : "false");
   return oss.str();
 }
+

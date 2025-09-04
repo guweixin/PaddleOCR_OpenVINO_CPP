@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,7 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "src/utils/status.h"
 #ifdef WITH_GPU
 static constexpr const char *DEVICE = "gpu:0";
 #else
@@ -42,10 +41,10 @@ public:
   const std::vector<std::string> &GetSupportDevice() const;
   std::string DebugString() const;
 
-  absl::Status SetRunMode(const std::string &run_mode);
-  absl::Status SetDeviceType(const std::string &device_type);
-  absl::Status SetDeviceId(int device_id);
-  absl::Status SetCpuThreads(int cpu_threads);
+  Status SetRunMode(const std::string &run_mode);
+  Status SetDeviceType(const std::string &device_type);
+  Status SetDeviceId(int device_id);
+  Status SetCpuThreads(int cpu_threads);
   void SetDeletePass(const std::vector<std::string> &delete_pass);
   void SetEnableNewIR(bool enable_new_ir);
   void SetEnableCinn(bool enable_cinn);
@@ -59,3 +58,4 @@ private:
   bool enable_new_ir_ = true;
   bool enable_cinn_ = false;
 };
+

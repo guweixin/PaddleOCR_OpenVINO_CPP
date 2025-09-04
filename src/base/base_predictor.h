@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,12 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/types/optional.h"
+#include "src/utils/status.h"
 #include "base_batch_sampler.h"
 #include "base_cv_result.h"
 #include "src/common/static_infer.h"
@@ -31,9 +30,9 @@
 
 class BasePredictor {
 public:
-  BasePredictor(const absl::optional<std::string> &model_dir = absl::nullopt,
-                const absl::optional<std::string> &model_name = absl::nullopt,
-                const absl::optional<std::string> &device = absl::nullopt,
+  BasePredictor(const std::optional<std::string> &model_dir = std::nullopt,
+                const std::optional<std::string> &model_name = std::nullopt,
+                const std::optional<std::string> &device = std::nullopt,
                 const std::string &precision = "fp32",
                 int cpu_threads = 8,
                 int batch_size = 1, const std::string sample_type = "");
@@ -46,7 +45,7 @@ public:
   std::unique_ptr<PaddleInfer> CreateStaticInfer();
 
   const PaddlePredictorOption &PPOption();
-  absl::StatusOr<std::string> ModelName() { return model_name_; };
+  StatusOr<std::string> ModelName() { return model_name_; };
   std::string ConfigPath() { return config_.ConfigYamlPath(); };
 
   void SetBatchSize(int batch_size);
@@ -54,7 +53,7 @@ public:
   virtual std::vector<std::unique_ptr<BaseCVResult>>
   Process(std::vector<cv::Mat> &batch_data) = 0;
   virtual void ResetResult() = 0;
-  absl::Status BuildBatchSampler();
+  Status BuildBatchSampler();
 
   void SetInputPath(const std::vector<std::string> &input_path) {
     input_path_ = input_path;
@@ -68,7 +67,7 @@ public:
   static bool print_flag;
 
 protected:
-  absl::optional<std::string> model_dir_;
+  std::optional<std::string> model_dir_;
   YamlConfig config_;
   int batch_size_;
   std::unique_ptr<BaseBatchSampler> batch_sampler_ptr_;
@@ -104,3 +103,4 @@ BasePredictor::Predict(const T &input) {
   }
   return result;
 }
+
