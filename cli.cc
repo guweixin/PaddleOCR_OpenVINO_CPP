@@ -16,6 +16,8 @@
 #include "src/pipelines/ocr/result.h"
 #include "src/utils/args.h"
 #include "src/utils/simple_config.h"
+#include "src/utils/utility.h"
+#include "src/utils/simple_logger.h"
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -133,17 +135,51 @@ int main(int argc, char *argv[]) {
   }
   
   auto params = GetPipelineParams();
-  auto outputs = PaddleOCR(params).Predict(input);
   
-  for (auto &output : outputs) {
-    output->Print();
-    output->SaveToImg(save_path);
-    output->SaveToJson(save_path);
-    
-    // Cast to OCRResult to access SaveToTxt method
-    if (OCRResult* ocr_result = dynamic_cast<OCRResult*>(output.get())) {
-      ocr_result->SaveToTxt(save_path);
+  // Check if input is a directory or a single file
+  std::vector<std::string> image_paths;
+  if (Utility::IsDirectory(input)) {
+    INFO("Input is a directory, processing all images in: %s", input.c_str());
+    Utility::GetFilesRecursive(input, image_paths);
+    if (image_paths.empty()) {
+      INFOE("No image files found in directory: %s", input.c_str());
+      exit(-1);
+    }
+    INFO("Found %zu image files to process", image_paths.size());
+  } else {
+    // Single file input
+    if (Utility::IsImageFile(input)) {
+      image_paths.push_back(input);
+    } else {
+      INFOE("Input file is not a valid image: %s", input.c_str());
+      exit(-1);
     }
   }
+  
+  // Initialize OCR model once (this is the expensive operation)
+  INFO("Initializing OCR models...");
+  PaddleOCR ocr_pipeline(params);
+  INFO("OCR models initialized successfully!");
+  
+  // Process each image using the same initialized model
+  for (size_t i = 0; i < image_paths.size(); i++) {
+    const std::string& image_path = image_paths[i];
+    INFO("Processing image %zu/%zu: %s", i + 1, image_paths.size(), image_path.c_str());
+    
+    auto outputs = ocr_pipeline.Predict(image_path);
+    
+    for (auto &output : outputs) {
+      output->Print();
+      output->SaveToImg(save_path);
+      output->SaveToJson(save_path);
+      
+      // Cast to OCRResult to access SaveToTxt method
+      if (OCRResult* ocr_result = dynamic_cast<OCRResult*>(output.get())) {
+        ocr_result->SaveToTxt(save_path);
+      }
+    }
+  }
+  
+  INFO("All images processed successfully!");
   return 0;
 }

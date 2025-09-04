@@ -56,7 +56,7 @@ void print_help()
     std::cout << "Usage: program [options]\n"
               << "Options:\n"
               << "Common args:\n"
-              << "  --input <path>                     Data to be predicted, required. Local path of an image file\n"
+              << "  --input <path>                     Data to be predicted, required. Local path of an image file or directory containing images\n"
               << "  --save_path <path>                 Path to save inference result files (default: ./output/)\n"
               << "  --text_detection_model_name <name> Name of the text detection model (default: PP-OCRv5_server_det)\n"
               << "  --text_detection_model_dir <path>  Path to the text detection model directory\n"

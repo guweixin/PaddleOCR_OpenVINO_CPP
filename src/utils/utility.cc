@@ -82,26 +82,32 @@ Utility::FindModelPath(const std::string &model_dir,
 }
 StatusOr<std::string>
 Utility::GetDefaultConfig(std::string pipeline_name) {
-  std::string current_path = __FILE__;
-  for (int i = 0; i < 2; i++) {
-    size_t pos = current_path.find_last_of(PATH_SEPARATOR);
-    if (pos == std::string::npos) {
-      return Status::NotFoundError("Could not find pipline config yaml :" +
-                                 pipeline_name);
+  // Try relative paths first (relative to executable)
+  std::vector<std::string> candidate_paths = {
+    "configs" + std::string(1, PATH_SEPARATOR) + pipeline_name + ".yaml",
+    "configs" + std::string(1, PATH_SEPARATOR) + pipeline_name + ".yml",
+    ".." + std::string(1, PATH_SEPARATOR) + "configs" + std::string(1, PATH_SEPARATOR) + pipeline_name + ".yaml",
+    ".." + std::string(1, PATH_SEPARATOR) + "configs" + std::string(1, PATH_SEPARATOR) + pipeline_name + ".yml",
+    ".." + std::string(1, PATH_SEPARATOR) + "src" + std::string(1, PATH_SEPARATOR) + "configs" + std::string(1, PATH_SEPARATOR) + pipeline_name + ".yaml",
+    ".." + std::string(1, PATH_SEPARATOR) + "src" + std::string(1, PATH_SEPARATOR) + "configs" + std::string(1, PATH_SEPARATOR) + pipeline_name + ".yml"
+  };
+  
+  std::cout << "[DEBUG] Searching for config file: " << pipeline_name << std::endl;
+  
+  for (const auto& path : candidate_paths) {
+    std::cout << "[DEBUG] Trying config path: " << path << std::endl;
+    if (FileExists(path).ok()) {
+      std::cout << "[DEBUG] Found config file: " << path << std::endl;
+      return path;
     }
-    current_path = current_path.substr(0, pos);
   }
-  std::string config_path_yaml = current_path + PATH_SEPARATOR + "configs" +
-                                 PATH_SEPARATOR + pipeline_name + ".yaml";
-  std::string config_path_yml = current_path + PATH_SEPARATOR + "configs" +
-                                PATH_SEPARATOR + pipeline_name + ".yml";
-  if (FileExists(config_path_yaml).ok()) {
-    return config_path_yaml;
-  } else if (FileExists(config_path_yml).ok()) {
-    return config_path_yml;
+  
+  std::cout << "[DEBUG] No config file found. Checked paths:" << std::endl;
+  for (const auto& path : candidate_paths) {
+    std::cout << "  - " << path << std::endl;
   }
-  return Status::NotFoundError("Could not find pipline config yaml :" +
-                             pipeline_name);
+  
+  return Status::NotFoundError("Could not find pipeline config yaml: " + pipeline_name);
 }
 StatusOr<std::string>
 Utility::GetConfigPaths(const std::string &model_dir,
