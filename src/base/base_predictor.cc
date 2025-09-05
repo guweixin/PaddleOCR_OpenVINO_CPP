@@ -31,24 +31,19 @@ BasePredictor::BasePredictor(const std::optional<std::string> &model_dir,
                              int batch_size, const std::string sampler_type)
     : model_dir_(model_dir), batch_size_(batch_size),
       sampler_type_(sampler_type) {
-  std::cout << "[DEBUG] BasePredictor constructor started" << std::endl;
-  
   // 创建一个空的配置对象，不从文件加载
   config_ = SimpleConfig({});
   
   auto status_build = BuildBatchSampler();
   if (!status_build.ok()) {
-    std::cout << "[DEBUG] Build sampler failed: " << status_build.ToString() << std::endl;
     // INFOE("Build sampler fail: %s", status_build.ToString().c_str());
     exit(-1);
   }
-  std::cout << "[DEBUG] Built batch sampler successfully" << std::endl;
   
   // 直接使用传入的模型名称，不从配置文件读取
   if (model_name.has_value()) {
     model_name_ = model_name.value();
   } else {
-    std::cout << "[DEBUG] No model name provided" << std::endl;
     exit(-1);
   }
   pp_option_ptr_.reset(new PaddlePredictorOption());

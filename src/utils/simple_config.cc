@@ -51,7 +51,6 @@ SimpleConfig::SimpleConfig(const std::string &model_dir) {
     
     if (!found) {
       // If no config file found, create a minimal default config
-      std::cout << "[DEBUG] No config file found in model directory, using defaults" << std::endl;
       Init();
       return;
     }
@@ -179,31 +178,24 @@ void SimpleConfig::Init() {
 }
 
 StatusOr<std::string> SimpleConfig::GetString(const std::string &key, const std::string &default_value) const {
-  std::cout << "[DEBUG] GetString called with key: '" << key << "'" << std::endl;
   
   auto it = data_.find(key);
   if (it != data_.end()) {
-    std::cout << "[DEBUG] Found direct key: '" << key << "' = '" << it->second << "'" << std::endl;
     return it->second;
   }
   
   // Try with SubModules prefix
   std::string prefixed_key = "SubModules." + key;
-  std::cout << "[DEBUG] Trying prefixed key: '" << prefixed_key << "'" << std::endl;
   it = data_.find(prefixed_key);
   if (it != data_.end()) {
-    std::cout << "[DEBUG] Found prefixed key: '" << prefixed_key << "' = '" << it->second << "'" << std::endl;
     return it->second;
   }
   
   if (!default_value.empty()) {
-    std::cout << "[DEBUG] Using default value: '" << default_value << "'" << std::endl;
     return default_value;
   }
   
-  std::cout << "[DEBUG] Key not found: '" << key << "'" << std::endl;
   // Print all available keys for debugging
-  std::cout << "[DEBUG] Available keys:" << std::endl;
   for (const auto &pair : data_) {
     std::cout << "  '" << pair.first << "' = '" << pair.second << "'" << std::endl;
   }

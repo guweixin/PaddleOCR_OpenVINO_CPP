@@ -48,10 +48,8 @@ public:
 
 template <typename T, typename... Args>
 std::unique_ptr<BasePredictor> BasePipeline::CreateModule(Args &&...args) {
-  std::cout << "[DEBUG] CreateModule called for type: " << typeid(T).name() << std::endl;
   std::unique_ptr<BasePredictor> base_predictor =
       std::unique_ptr<T>(new T(std::forward<Args>(args)...));
-  std::cout << "[DEBUG] CreateModule completed successfully" << std::endl;
   return base_predictor;
 }
 

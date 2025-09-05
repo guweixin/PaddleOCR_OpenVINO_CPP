@@ -18,40 +18,31 @@
 #include "src/utils/args.h"
 _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
     : BasePipeline(), params_(params) {
-  std::cout << "[DEBUG] OCRPipeline constructor started" << std::endl;
   
   if (params.paddlex_config.has_value()) {
-    std::cout << "[DEBUG] Using paddlex_config parameter" << std::endl;
     if (params.paddlex_config.value().IsStr()) {
       config_ = SimpleConfig(params.paddlex_config.value().GetStr());
     } else {
       config_ = SimpleConfig(params.paddlex_config.value().GetMap());
     }
   } else {
-    std::cout << "[DEBUG] Getting default OCR config" << std::endl;
     auto config_path = Utility::GetDefaultConfig("OCR");
     if (!config_path.ok()) {
       INFOE("Could not find OCR pipeline config file: %s",
             config_path.status().ToString().c_str());
       exit(-1);
     }
-    std::cout << "[DEBUG] Loading config from: " << config_path.value() << std::endl;
     config_ = SimpleConfig(config_path.value());
   }
-  
-  std::cout << "[DEBUG] About to call OverrideConfig()" << std::endl;
+
   OverrideConfig();
-  
-  std::cout << "[DEBUG] Getting text_type from config" << std::endl;
+
   auto text_type = config_.GetString("text_type");
   if (!text_type.ok()) {
     INFOE("Get text type fail : %s", text_type.status().ToString().c_str());
     exit(-1);
   }
   text_type_ = text_type.value();
-  std::cout << "[DEBUG] text_type: " << text_type_ << std::endl;
-  
-  std::cout << "[DEBUG] Creating TextDetPredictor" << std::endl;
   TextDetPredictorParams params_det;
   auto result_text_det_model_name =
       config_.GetString("TextDetection.model_name");
@@ -61,7 +52,6 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
     exit(-1);
   }
   params_det.model_name = result_text_det_model_name.value();
-  std::cout << "[DEBUG] TextDetection model_name: " << params_det.model_name.value() << std::endl;
   auto result_text_det_model_dir = config_.GetString("TextDetection.model_dir");
   if (!result_text_det_model_dir.ok()) {
     INFOE("Could not find TextDetection model dir : %s",
@@ -111,15 +101,8 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
     exit(-1);
   }
   
-  std::cout << "[DEBUG] About to call CreateModule<TextDetPredictor>" << std::endl;
-  std::cout << "[DEBUG] params_det.model_dir: " << (params_det.model_dir.has_value() ? params_det.model_dir.value() : "null") << std::endl;
-  std::cout << "[DEBUG] params_det.model_name: " << (params_det.model_name.has_value() ? params_det.model_name.value() : "null") << std::endl;
-  
   text_det_model_ = CreateModule<TextDetPredictor>(params_det);
   
-  std::cout << "[DEBUG] CreateModule<TextDetPredictor> completed successfully" << std::endl;
-  std::cout << "[DEBUG] About to set text_det_params_" << std::endl;
-
   text_det_params_.text_det_limit_side_len = params_det.limit_side_len.value();
   text_det_params_.text_det_limit_type = params_det.limit_type.value();
   text_det_params_.text_det_max_side_limit = params_det.max_side_limit.value();
@@ -127,7 +110,6 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
   text_det_params_.text_det_box_thresh = params_det.box_thresh.value();
   text_det_params_.text_det_unclip_ratio = params_det.unclip_ratio.value();
 
-  std::cout << "[DEBUG] text_det_params_ set successfully, now creating TextRecPredictor" << std::endl;
 
   TextRecPredictorParams params_rec;
   auto result_text_rec_model_name =

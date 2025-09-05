@@ -165,46 +165,25 @@ Status Utility::MyCreateFile(const std::string &filepath) {
 }
 
 StatusOr<std::vector<cv::Mat>> Utility::SplitBatch(const cv::Mat &batch) {
-  std::cout << "[DEBUG] SplitBatch called with batch: dims=" << batch.dims << ", size=[";
-  for (int i = 0; i < batch.dims; i++) {
-    std::cout << batch.size[i];
-    if (i < batch.dims - 1) std::cout << ",";
-  }
-  std::cout << "], type=" << batch.type() << ", total=" << batch.total() << std::endl;
-  
   if (batch.dims < 1) {
-    std::cout << "[DEBUG] SplitBatch error: Input batch must have at least 1 dimension" << std::endl;
     return Status::InvalidArgumentError(
         "Input batch must have at least 1 dimension.");
   }
   if (batch.type() != CV_32F) {
-    std::cout << "[DEBUG] SplitBatch error: Input batch must have CV_32F element type, got type " << batch.type() << std::endl;
     return Status::InvalidArgumentError(
         "Input batch must have CV_32F element type.");
   }
 
   std::vector<cv::Mat> split_mats;
   int batch_size = batch.size[0];
-  std::cout << "[DEBUG] SplitBatch: splitting into " << batch_size << " sub-matrices" << std::endl;
-  
   std::vector<cv::Range> myranges(batch.dims);
   for (int i = 0; i < batch_size; ++i) {
     myranges[0] = cv::Range(i, i + 1);
     for (int d = 1; d < batch.dims; ++d)
       myranges[d] = cv::Range::all();
     cv::Mat sub_mat = batch(&myranges[0]);
-
-    std::cout << "[DEBUG] SplitBatch sub_mat[" << i << "]: dims=" << sub_mat.dims << ", size=[";
-    for (int j = 0; j < sub_mat.dims; j++) {
-      std::cout << sub_mat.size[j];
-      if (j < sub_mat.dims - 1) std::cout << ",";
-    }
-    std::cout << "], type=" << sub_mat.type() << ", total=" << sub_mat.total() << std::endl;
-
     split_mats.push_back(sub_mat);
   }
-
-  std::cout << "[DEBUG] SplitBatch completed successfully with " << split_mats.size() << " sub-matrices" << std::endl;
   return split_mats;
 }
 
