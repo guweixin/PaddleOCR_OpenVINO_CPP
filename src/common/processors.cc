@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <iostream>
 #include <numeric>
 #include <stdexcept>
 #include <unordered_map>
@@ -445,8 +447,16 @@ NormalizeImage::Apply(std::vector<cv::Mat> &imgs, const void *param) const {
 
 StatusOr<std::vector<cv::Mat>>
 ToCHWImage::Apply(std::vector<cv::Mat> &input, const void *param) const {
+  std::cout << "[DEBUG] ToCHWImage::Apply - Input size: " << input.size() << std::endl;
+  
   std::vector<cv::Mat> chw_imgs;
-  for (const auto &img : input) {
+  for (size_t i = 0; i < input.size(); ++i) {
+    const auto &img = input[i];
+    std::cout << "[DEBUG] ToCHWImage Input[" << i << "]: rows=" << img.rows 
+              << ", cols=" << img.cols << ", channels=" << img.channels() 
+              << ", dims=" << img.dims << ", total=" << img.total() 
+              << ", type=" << img.type() << ", isContinuous=" << img.isContinuous() << std::endl;
+    
     if (img.empty()) {
       return Status::InvalidArgumentError("Input image is empty!");
     }
@@ -455,17 +465,51 @@ ToCHWImage::Apply(std::vector<cv::Mat> &input, const void *param) const {
           "Input image must have 3 channels (HWC format)!");
     }
 
-    std::vector<cv::Mat> vec_split = {};
-    cv::split(img, vec_split);
-    cv::Mat chw_img;
-    for (auto &split : vec_split)
-      split = split.reshape(1, 1);
-    cv::hconcat(vec_split, chw_img);
-    std::vector<int> shape = {img.channels(), img.size[0], img.size[1]};
-    chw_img = chw_img.reshape(1, shape);
+    // 获取图像尺寸
+    int height = img.rows;
+    int width = img.cols;
+    int channels = img.channels();
+    
+    // 分离通道并确保为float类型
+    std::vector<cv::Mat> bgr_channels;
+    cv::split(img, bgr_channels);
+    
+    for (auto &channel : bgr_channels) {
+      if (channel.depth() != CV_32F) {
+        channel.convertTo(channel, CV_32F);
+      }
+    }
+    
+    // 创建真正的3D Mat，维度为 [C, H, W]
+    std::vector<int> sizes = {channels, height, width};
+    cv::Mat chw_img(3, sizes.data(), CV_32F);
+    
+    // 按CHW顺序填充数据
+    for (int c = 0; c < channels; ++c) {
+      for (int h = 0; h < height; ++h) {
+        for (int w = 0; w < width; ++w) {
+          // 在3D Mat中的索引
+          int idx[3] = {c, h, w};
+          float pixel_value = bgr_channels[c].at<float>(h, w);
+          chw_img.at<float>(idx) = pixel_value;
+        }
+      }
+    }
+    
+    // 验证Mat属性
+    std::cout << "[DEBUG] ToCHWImage Output[" << i << "]: dims=" << chw_img.dims;
+    if (chw_img.dims >= 3) {
+      std::cout << ", size=[" << chw_img.size[0] << "," << chw_img.size[1] << "," << chw_img.size[2] << "]";
+    } else {
+      std::cout << ", rows=" << chw_img.rows << ", cols=" << chw_img.cols;
+    }
+    std::cout << ", total=" << chw_img.total() << ", channels=" << chw_img.channels() 
+              << ", type=" << chw_img.type() << ", isContinuous=" << chw_img.isContinuous() << std::endl;
+    
     chw_imgs.push_back(chw_img);
   }
 
+  std::cout << "[DEBUG] ToCHWImage::Apply - Output size: " << chw_imgs.size() << std::endl;
   return chw_imgs;
 }
 
@@ -526,8 +570,23 @@ ToBatch::operator()(const std::vector<cv::Mat> &imgs) const {
 
 StatusOr<std::vector<cv::Mat>> ToBatch::Apply(std::vector<cv::Mat> &input,
                                                     const void *param) const {
+  std::cout << "[DEBUG] ToBatch::Apply - Input size: " << input.size() << std::endl;
+  
   if (input.empty()) {
     return Status::InvalidArgumentError("Input image vector is empty.");
+  }
+
+  // 打印输入信息
+  for (size_t i = 0; i < input.size(); ++i) {
+    const auto &image = input[i];
+    std::cout << "[DEBUG] ToBatch Input[" << i << "]: dims=" << image.dims;
+    if (image.dims >= 3) {
+      std::cout << ", size=[" << image.size[0] << "," << image.size[1] << "," << image.size[2] << "]";
+    } else {
+      std::cout << ", rows=" << image.rows << ", cols=" << image.cols;
+    }
+    std::cout << ", total=" << image.total() << ", channels=" << image.channels() 
+              << ", type=" << image.type() << ", isContinuous=" << image.isContinuous() << std::endl;
   }
 
   std::vector<int> batch_shape = {(int)input.size()};
@@ -545,12 +604,36 @@ StatusOr<std::vector<cv::Mat>> ToBatch::Apply(std::vector<cv::Mat> &input,
       }
     }
   }
+  
+  std::cout << "[DEBUG] ToBatch - batch_shape: [";
+  for (size_t i = 0; i < batch_shape.size(); ++i) {
+    std::cout << batch_shape[i];
+    if (i < batch_shape.size() - 1) std::cout << ",";
+  }
+  std::cout << "]" << std::endl;
+  
   cv::Mat batch_out;
   for (auto &image : input)
     image = image.reshape(1, 1);
   cv::vconcat(input, batch_out);
   batch_out = batch_out.reshape(1, batch_shape);
+  
+  std::cout << "[DEBUG] ToBatch Output: dims=" << batch_out.dims;
+  if (batch_out.dims >= 3) {
+    std::cout << ", size=[";
+    for (int i = 0; i < batch_out.dims; ++i) {
+      std::cout << batch_out.size[i];
+      if (i < batch_out.dims - 1) std::cout << ",";
+    }
+    std::cout << "]";
+  } else {
+    std::cout << ", rows=" << batch_out.rows << ", cols=" << batch_out.cols;
+  }
+  std::cout << ", total=" << batch_out.total() << ", channels=" << batch_out.channels() 
+            << ", type=" << batch_out.type() << ", isContinuous=" << batch_out.isContinuous() << std::endl;
+  
   std::vector<cv::Mat> out = {batch_out};
+  std::cout << "[DEBUG] ToBatch::Apply - Output size: " << out.size() << std::endl;
   return out;
 }
 

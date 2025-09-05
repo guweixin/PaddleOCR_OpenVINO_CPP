@@ -133,13 +133,18 @@ TextDetPredictor::Process(std::vector<cv::Mat> &batch_data) {
   auto db_result = post_op_.at("DBPostProcess")
                        ->Apply(infer_result.value()[0], origin_shape);
 
+  std::cout << "[DEBUG] DBPostProcess Apply returned" << std::endl;
   if (!db_result.ok()) {
+    std::cout << "[DEBUG] DBPostProcess failed: " << db_result.status().ToString() << std::endl;
     INFOE(db_result.status().ToString().c_str());
     exit(-1);
   }
 
+  std::cout << "[DEBUG] DBPostProcess success, result size: " << db_result.value().size() << std::endl;
   std::vector<std::unique_ptr<BaseCVResult>> base_cv_result_ptr_vec = {};
   for (int i = 0; i < db_result.value().size(); i++, input_index_++) {
+    std::cout << "[DEBUG] Processing result " << i << ", polys: " << db_result.value()[i].first.size() 
+              << ", scores: " << db_result.value()[i].second.size() << std::endl;
     TextDetPredictorResult predictor_result;
     if (!input_path_.empty()) {
       if (input_index_ == input_path_.size())
@@ -154,6 +159,7 @@ TextDetPredictor::Process(std::vector<cv::Mat> &batch_data) {
         std::unique_ptr<BaseCVResult>(new TextDetResult(predictor_result)));
   }
 
+  std::cout << "[DEBUG] TextDetPredictor::Process completed successfully with " << base_cv_result_ptr_vec.size() << " results" << std::endl;
   return base_cv_result_ptr_vec;
 }
 

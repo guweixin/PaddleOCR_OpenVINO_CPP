@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,17 +19,16 @@
 #include <vector>
 
 #include "src/utils/status.h"
-#include "src/utils/status.h"
 #include "openvino/openvino.hpp"
 #include "src/utils/ilogger.h"
-#include "src/utils/pp_option.h"
+#include "src/utils/openvino_option.h"
 
 class OpenVinoInfer {
 public:
   explicit OpenVinoInfer(const std::string &model_name,
                          const std::string &model_dir,
                          const std::string &model_file_prefix,
-                         const PaddlePredictorOption &option);
+                         const OpenVinoOption &option);
   ~OpenVinoInfer() = default;
   
   StatusOr<std::vector<cv::Mat>>
@@ -39,7 +38,7 @@ private:
   std::string model_dir_;
   std::string model_file_prefix_;
   std::string model_name_;
-  PaddlePredictorOption option_;
+  OpenVinoOption option_;
   
   ov::Core core_;
   std::shared_ptr<ov::Model> model_;

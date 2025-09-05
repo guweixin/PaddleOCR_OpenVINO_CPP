@@ -23,7 +23,7 @@
 #include "src/utils/status.h"
 #include "base_batch_sampler.h"
 #include "base_cv_result.h"
-#include "src/common/static_infer.h"
+#include "src/common/openvino_infer.h"
 #include "src/utils/func_register.h"
 #include "src/utils/pp_option.h"
 #include "src/utils/simple_config.h"
@@ -42,7 +42,7 @@ public:
   template <typename T>
   std::vector<std::unique_ptr<BaseCVResult>> Predict(const T &input);
 
-  std::unique_ptr<PaddleInfer> CreateStaticInfer();
+  std::unique_ptr<OpenVinoInfer> CreateStaticInfer();
 
   const PaddlePredictorOption &PPOption();
   StatusOr<std::string> ModelName() { return model_name_; };

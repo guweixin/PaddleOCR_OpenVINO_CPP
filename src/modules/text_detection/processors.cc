@@ -258,26 +258,45 @@ DBPostProcess::Apply(const cv::Mat &preds, const std::vector<int> &img_shapes,
                      std::optional<float> thresh,
                      std::optional<float> box_thresh,
                      std::optional<float> unclip_ratio) {
+  std::cout << "[DEBUG] DBPostProcess::Apply started" << std::endl;
+  std::cout << "[DEBUG] Input preds: dims=" << preds.dims << ", size=[";
+  for (int i = 0; i < preds.dims; i++) {
+    std::cout << preds.size[i];
+    if (i < preds.dims - 1) std::cout << ",";
+  }
+  std::cout << "], type=" << preds.type() << ", total=" << preds.total() << std::endl;
+  std::cout << "[DEBUG] img_shapes: [" << img_shapes[0] << "," << img_shapes[1] << "]" << std::endl;
+  
   std::vector<
       std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
       db_result = {};
 
-  auto preds_batch = Utility::SplitBatch(preds);
-
-  if (!preds_batch.ok()) {
-    return preds_batch.status();
+  // 对于文本检测，输入应该是 [1,1,H,W] 格式的概率图
+  // 我们需要去掉batch维度，直接处理 [1,H,W] 或 [H,W] 的数据
+  cv::Mat pred_for_processing = preds;
+  
+  // 如果是4D张量 [1,1,H,W]，我们需要去掉前两个维度
+  if (preds.dims == 4 && preds.size[0] == 1 && preds.size[1] == 1) {
+    std::cout << "[DEBUG] Converting 4D tensor [1,1,H,W] to 2D [H,W]" << std::endl;
+    // 重新整形为2D: [H, W]
+    int h = preds.size[2];
+    int w = preds.size[3];
+    pred_for_processing = preds.reshape(1, {h, w});
   }
-  for (const auto &pred : preds_batch.value()) {
-    auto result = Process(pred, img_shapes, thresh.value_or(thresh_),
-                          box_thresh.value_or(box_thresh_),
-                          unclip_ratio.value_or(unclip_ratio_));
+  
+  std::cout << "[DEBUG] Processing single prediction map" << std::endl;
+  auto result = Process(pred_for_processing, img_shapes, thresh.value_or(thresh_),
+                        box_thresh.value_or(box_thresh_),
+                        unclip_ratio.value_or(unclip_ratio_));
 
-    if (!result.ok()) {
-      return result.status();
-    }
-    db_result.push_back(result.value());
+  if (!result.ok()) {
+    std::cout << "[DEBUG] Process failed: " << result.status().ToString() << std::endl;
+    return result.status();
   }
+  std::cout << "[DEBUG] Process success, found " << result.value().first.size() << " text boxes" << std::endl;
+  db_result.push_back(result.value());
 
+  std::cout << "[DEBUG] DBPostProcess::Apply completed successfully" << std::endl;
   return db_result;
 }
 
@@ -285,11 +304,30 @@ StatusOr<
     std::pair<std::vector<std::vector<cv::Point2f>>, std::vector<float>>>
 DBPostProcess::Process(const cv::Mat &pred, const std::vector<int> &img_shape,
                        float thresh, float box_thresh, float unclip_ratio) {
+  std::cout << "[DEBUG] DBPostProcess::Process called with thresh=" << thresh 
+            << ", box_thresh=" << box_thresh << ", unclip_ratio=" << unclip_ratio << std::endl;
+  std::cout << "[DEBUG] Input pred: dims=" << pred.dims << ", size=[";
+  for (int i = 0; i < pred.dims; i++) {
+    std::cout << pred.size[i];
+    if (i < pred.dims - 1) std::cout << ",";
+  }
+  std::cout << "], type=" << pred.type() << std::endl;
+  
+  // 检查数据范围
+  double minVal, maxVal;
+  cv::minMaxLoc(pred, &minVal, &maxVal);
+  std::cout << "[DEBUG] Prediction data range: min=" << minVal << ", max=" << maxVal << std::endl;
+  
   cv::Mat pred_single = pred.clone();
   std::vector<int> shape_pred = {pred_single.size[pred_single.dims - 2],
                                  pred_single.size[pred_single.dims - 1]};
+  std::cout << "[DEBUG] Reshaping to: [" << shape_pred[0] << "," << shape_pred[1] << "]" << std::endl;
   pred_single = pred_single.reshape(1, shape_pred);
+  
   cv::Mat segmentation = pred_single > thresh;
+  int segmentation_pixels = cv::countNonZero(segmentation);
+  std::cout << "[DEBUG] Segmentation: " << segmentation_pixels << " pixels above thresh " << thresh << std::endl;
+  
   cv::Mat mask;
   if (use_dilation_) {
     cv::Mat kernel = (cv::Mat_<uchar>(2, 2) << 1, 1, 1, 1); //暂时未测试
@@ -300,6 +338,7 @@ DBPostProcess::Process(const cv::Mat &pred, const std::vector<int> &img_shape,
 
   int src_h = img_shape[0];
   int src_w = img_shape[1];
+  std::cout << "[DEBUG] Original image shape: " << src_h << "x" << src_w << std::endl;
 
   if (box_type_ == "poly") {
     return PolygonsFromBitmap(pred_single, mask, src_w, src_h, box_thresh,

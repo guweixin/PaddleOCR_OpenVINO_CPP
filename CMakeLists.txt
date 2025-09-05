@@ -8,14 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 option(WITH_GPU        "Compile demo with GPU/CPU, default use CPU."                    OFF)
 option(WITH_STATIC_LIB "Compile demo with static/shared library, default use static."   ON)
-# option(WITH_OPENVINO   "Enable OpenVINO inference support."                             ON)
 option(USE_FREETYPE "Enable FreeType support" OFF)
 
-SET(PADDLE_LIB "" CACHE PATH "Location of libraries")
-SET(OPENCV_DIR "" CACHE PATH "Location of libraries")
-# SET(OPENVINO_DIR "" CACHE PATH "Location of OpenVINO libraries")
-SET(CUDA_LIB "" CACHE PATH "Location of libraries")
-SET(CUDNN_LIB "" CACHE PATH "Location of libraries")
+SET(OPENCV_DIR "" CACHE PATH "Location of OpenCV libraries")
+SET(OPENVINO_DIR "" CACHE PATH "Location of OpenVINO libraries")
+SET(CUDA_LIB "" CACHE PATH "Location of CUDA libraries")
+SET(CUDNN_LIB "" CACHE PATH "Location of CUDNN libraries")
 
 macro(safe_set_static_flag)
     foreach(flag_var
@@ -27,25 +25,20 @@ macro(safe_set_static_flag)
     endforeach(flag_var)
 endmacro()
 
-if(NOT DEFINED PADDLE_LIB)
-  message(FATAL_ERROR "please set PADDLE_LIB with -DPADDLE_LIB=/path/paddle/lib")
-endif()
-
 if(NOT DEFINED OPENCV_DIR)
     message(FATAL_ERROR "please set OPENCV_DIR with -DOPENCV_DIR=/path/opencv")
 endif()
 
-# if(WITH_OPENVINO)
-#     if(NOT DEFINED OPENVINO_DIR)
-#         message(FATAL_ERROR "please set OPENVINO_DIR with -DOPENVINO_DIR=/path/openvino")
-#     endif()
-#     add_definitions(-DWITH_OPENVINO)
-# endif()
+if(NOT DEFINED OPENVINO_DIR)
+    message(FATAL_ERROR "please set OPENVINO_DIR with -DOPENVINO_DIR=/path/openvino")
+endif()
 
 
 if (WIN32)
-  include_directories("${PADDLE_LIB}/paddle/include")
-  link_directories("${PADDLE_LIB}/paddle/lib")
+  # OpenVINO configuration for Windows
+  include_directories("${OPENVINO_DIR}/runtime/include")
+  link_directories("${OPENVINO_DIR}/runtime/lib/intel64/Release")
+  
   set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
   set(OpenCV_DIR "${OPENCV_DIR}/x64/vc16/lib") 
   find_package(OpenCV REQUIRED )
@@ -57,6 +50,10 @@ if (WIN32)
   endif()  
 
 else ()
+  # OpenVINO configuration for Linux
+  include_directories("${OPENVINO_DIR}/runtime/include")
+  link_directories("${OPENVINO_DIR}/runtime/lib/intel64")
+  
   set(OpenCV_DIR "${OPENCV_DIR}/lib64/cmake/opencv4") 
   find_package(OpenCV REQUIRED)
   if(USE_FREETYPE)
@@ -65,10 +62,11 @@ else ()
     endif()
     add_definitions(-DUSE_FREETYPE)
   endif()  
-
-  include_directories("${PADDLE_LIB}/paddle/include")
-  link_directories("${PADDLE_LIB}/paddle/lib")
 endif ()
+
+# OpenVINO is now required by default
+set(OPENVINO_LIBS openvino)
+
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 if (WIN32)
@@ -103,88 +101,11 @@ if (WITH_GPU)
     endif(NOT WIN32)
 endif()
 
-include_directories("${PADDLE_LIB}/third_party/install/protobuf/include")
-include_directories("${PADDLE_LIB}/third_party/install/glog/include")
-include_directories("${PADDLE_LIB}/third_party/install/xxhash/include")
-include_directories("${PADDLE_LIB}/third_party/install/zlib/include")
-include_directories("${PADDLE_LIB}/third_party/install/onnxruntime/include")
-include_directories("${PADDLE_LIB}/third_party/install/paddle2onnx/include")
-include_directories("${PADDLE_LIB}/third_party/install/openvino/include")
-include_directories("${PADDLE_LIB}/third_party/install/tbb/include")
-include_directories("${PADDLE_LIB}/third_party/boost")
-include_directories("${PADDLE_LIB}/third_party/eigen3")
-include_directories("${PADDLE_LIB}/paddle/include/") 
+# Include directories
 include_directories("${CMAKE_SOURCE_DIR}/")
 
-# # Add OpenVINO includes if enabled
-# if(WITH_OPENVINO)
-#     include_directories("${OPENVINO_DIR}/runtime/include")
-#     include_directories("${OPENVINO_DIR}/runtime/include/ie")
-#     link_directories("${OPENVINO_DIR}/runtime/lib/intel64/Release")
-#     if(WIN32)
-#         link_directories("${OPENVINO_DIR}/runtime/bin/intel64/Release")
-#     endif()
-# endif()
-
-link_directories("${PADDLE_LIB}/third_party/install/zlib/lib")
-link_directories("${PADDLE_LIB}/third_party/install/protobuf/lib")
-link_directories("${PADDLE_LIB}/third_party/install/glog/lib")
-link_directories("${PADDLE_LIB}/third_party/install/xxhash/lib")
-link_directories("${PADDLE_LIB}/third_party/install/onnxruntime/lib")
-link_directories("${PADDLE_LIB}/third_party/install/paddle2onnx/lib")
-link_directories("${PADDLE_LIB}/third_party/install/openvino/intel64")
-link_directories("${PADDLE_LIB}/third_party/install/tbb/lib")
-link_directories("${PADDLE_LIB}/paddle/lib")
-
-# Use OpenBLAS instead of MKL
-if (WIN32)
-  set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/openblas${CMAKE_STATIC_LIBRARY_SUFFIX})
-else ()
-  set(MATH_LIB ${PADDLE_LIB}/third_party/install/openblas/lib/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
-endif()
-
-# Note: libpaddle_inference_api.so/a must put before libpaddle_inference.so/a
-if(WITH_STATIC_LIB)
-  if(WIN32)
-    set(DEPS
-        ${PADDLE_LIB}/paddle/lib/paddle_inference${CMAKE_STATIC_LIBRARY_SUFFIX})
-  else()
-    set(DEPS
-        ${PADDLE_LIB}/paddle/lib/libpaddle_inference${CMAKE_STATIC_LIBRARY_SUFFIX})
-  endif()
-else()
-  if(WIN32)
-    set(DEPS
-        ${PADDLE_LIB}/paddle/lib/paddle_inference${CMAKE_SHARED_LIBRARY_SUFFIX})
-  else()
-    set(DEPS
-        ${PADDLE_LIB}/paddle/lib/libpaddle_inference${CMAKE_SHARED_LIBRARY_SUFFIX})
-  endif()
-endif(WITH_STATIC_LIB)
-
-if (NOT WIN32)
-    set(DEPS ${DEPS}
-        ${MATH_LIB}
-        glog protobuf z xxhash
-        )
-    if(EXISTS "${PADDLE_LIB}/third_party/install/snappystream/lib")
-        set(DEPS ${DEPS} snappystream)
-    endif()
-    if (EXISTS "${PADDLE_LIB}/third_party/install/snappy/lib")
-        set(DEPS ${DEPS} snappy)
-    endif()
-else()
-    set(DEPS ${DEPS}
-        ${MATH_LIB}
-        glog libprotobuf xxhash)
-    set(DEPS ${DEPS} libcmt shlwapi)
-    if (EXISTS "${PADDLE_LIB}/third_party/install/snappy/lib")
-        set(DEPS ${DEPS} snappy)
-    endif()
-    if(EXISTS "${PADDLE_LIB}/third_party/install/snappystream/lib")
-        set(DEPS ${DEPS} snappystream)
-    endif()
-endif(NOT WIN32)
+# Set up library dependencies
+set(DEPS ${OPENVINO_LIBS})
 
 if(WITH_GPU)
   if(NOT WIN32)
@@ -233,15 +154,6 @@ include_directories(${POLYCLIPPING_INCLUDE_DIR})
 set(DEPS ${DEPS} ${OpenCV_LIBS})
 set(DEPS ${DEPS} polyclipping)
 
-# # Add OpenVINO libraries if enabled
-# if(WITH_OPENVINO)
-#     if(WIN32)
-#         set(DEPS ${DEPS} openvino)
-#     else()
-#         set(DEPS ${DEPS} openvino)
-#     endif()
-# endif()
-
 if(UNIX)
   find_package(Iconv REQUIRED) 
 endif()
@@ -250,4 +162,3 @@ file(GLOB_RECURSE SRC_LIST "./src/*.cc")
 set(SRCS cli.cc )
 add_executable(${DEMO_NAME} ${SRCS} ${SRC_LIST} )
 target_link_libraries(${DEMO_NAME} ${DEPS} )
-

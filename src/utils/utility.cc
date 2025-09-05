@@ -35,32 +35,19 @@ Utility::GetModelPaths(const std::string &model_dir,
   std::map<std::string, std::pair<std::string, std::string>> model_paths;
   std::string model_path;
 
-  std::string json_path =
-      model_dir + PATH_SEPARATOR + model_file_prefix + ".json";
-  std::string pdmodel_path =
-      model_dir + PATH_SEPARATOR + model_file_prefix + ".pdmodel";
-  std::string params_path =
-      model_dir + PATH_SEPARATOR + model_file_prefix + ".pdiparams";
-  if (FileExists(json_path).ok()) {
-    model_path = json_path;
-  } else if (FileExists(pdmodel_path).ok()) {
-    model_path = pdmodel_path;
-  } else {
-    return Status::NotFoundError(FileExists(json_path).ToString() + " and " +
-                               FileExists(pdmodel_path).ToString());
+  // Look for OpenVINO format files first (.xml and .bin)
+  std::string xml_path =
+      model_dir + PATH_SEPARATOR + model_file_prefix + ".xml";
+  std::string bin_path =
+      model_dir + PATH_SEPARATOR + model_file_prefix + ".bin";
+      
+  if (FileExists(xml_path).ok() && FileExists(bin_path).ok()) {
+    model_paths["openvino"] = std::make_pair(xml_path, bin_path);
+    return model_paths;
   }
 
-  if (model_path.empty()) {
-    return Status::NotFoundError(
-        "No PaddlePaddle model file (.json or .pdmodel) found!");
-  }
-
-  if (FileExists(params_path).ok()) {
-    model_paths["paddle"] = std::make_pair(model_path, params_path);
-  } else {
-    return Status::NotFoundError(
-        "No PaddlePaddle params file (.pdiparams) found!");
-  }
+  return Status::NotFoundError(
+      "No OpenVINO model files (.xml/.bin) found! Expected: " + xml_path + " and " + bin_path);
 
   return model_paths;
 }
@@ -178,17 +165,28 @@ Status Utility::MyCreateFile(const std::string &filepath) {
 }
 
 StatusOr<std::vector<cv::Mat>> Utility::SplitBatch(const cv::Mat &batch) {
+  std::cout << "[DEBUG] SplitBatch called with batch: dims=" << batch.dims << ", size=[";
+  for (int i = 0; i < batch.dims; i++) {
+    std::cout << batch.size[i];
+    if (i < batch.dims - 1) std::cout << ",";
+  }
+  std::cout << "], type=" << batch.type() << ", total=" << batch.total() << std::endl;
+  
   if (batch.dims < 1) {
+    std::cout << "[DEBUG] SplitBatch error: Input batch must have at least 1 dimension" << std::endl;
     return Status::InvalidArgumentError(
         "Input batch must have at least 1 dimension.");
   }
   if (batch.type() != CV_32F) {
+    std::cout << "[DEBUG] SplitBatch error: Input batch must have CV_32F element type, got type " << batch.type() << std::endl;
     return Status::InvalidArgumentError(
         "Input batch must have CV_32F element type.");
   }
 
   std::vector<cv::Mat> split_mats;
   int batch_size = batch.size[0];
+  std::cout << "[DEBUG] SplitBatch: splitting into " << batch_size << " sub-matrices" << std::endl;
+  
   std::vector<cv::Range> myranges(batch.dims);
   for (int i = 0; i < batch_size; ++i) {
     myranges[0] = cv::Range(i, i + 1);
@@ -196,9 +194,17 @@ StatusOr<std::vector<cv::Mat>> Utility::SplitBatch(const cv::Mat &batch) {
       myranges[d] = cv::Range::all();
     cv::Mat sub_mat = batch(&myranges[0]);
 
+    std::cout << "[DEBUG] SplitBatch sub_mat[" << i << "]: dims=" << sub_mat.dims << ", size=[";
+    for (int j = 0; j < sub_mat.dims; j++) {
+      std::cout << sub_mat.size[j];
+      if (j < sub_mat.dims - 1) std::cout << ",";
+    }
+    std::cout << "], type=" << sub_mat.type() << ", total=" << sub_mat.total() << std::endl;
+
     split_mats.push_back(sub_mat);
   }
 
+  std::cout << "[DEBUG] SplitBatch completed successfully with " << split_mats.size() << " sub-matrices" << std::endl;
   return split_mats;
 }
 

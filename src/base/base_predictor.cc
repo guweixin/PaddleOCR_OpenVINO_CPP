@@ -20,6 +20,7 @@
 #include "src/common/image_batch_sampler.h"
 #include "src/utils/ilogger.h"
 #include "src/utils/pp_option.h"
+#include "src/utils/openvino_option.h"
 #include "src/utils/utility.h"
 
 BasePredictor::BasePredictor(const std::optional<std::string> &model_dir,
@@ -101,9 +102,15 @@ const PaddlePredictorOption &BasePredictor::PPOption() {
 
 void BasePredictor::SetBatchSize(int batch_size) { batch_size_ = batch_size; }
 
-std::unique_ptr<PaddleInfer> BasePredictor::CreateStaticInfer() {
-  return std::unique_ptr<PaddleInfer>(new PaddleInfer(
-      model_name_, model_dir_.value(), MODEL_FILE_PREFIX, PPOption()));
+std::unique_ptr<OpenVinoInfer> BasePredictor::CreateStaticInfer() {
+  // Convert PaddlePredictorOption to OpenVinoOption
+  OpenVinoOption openvino_option;
+  openvino_option.SetDeviceType(PPOption().DeviceType());
+  openvino_option.SetDeviceId(PPOption().DeviceId());
+  openvino_option.SetCpuThreads(PPOption().CpuThreads());
+  
+  return std::unique_ptr<OpenVinoInfer>(new OpenVinoInfer(
+      model_name_, model_dir_.value(), MODEL_FILE_PREFIX, openvino_option));
 }
 
 Status BasePredictor::BuildBatchSampler() {

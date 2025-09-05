@@ -62,7 +62,7 @@ private:
   TextDetPredictorParams params_;
   std::unordered_map<std::string, std::unique_ptr<DBPostProcess>> post_op_;
   std::vector<TextDetPredictorResult> predictor_result_vec_;
-  std::unique_ptr<PaddleInfer> infer_ptr_;
+  std::unique_ptr<OpenVinoInfer> infer_ptr_;
   int input_index_ = 0;
 };
 
