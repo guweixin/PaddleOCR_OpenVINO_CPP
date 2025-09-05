@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "src/api/pipelines/ocr.h"
+#include "src/pipelines/ocr/result.h"
 #include "src/utils/args.h"
 #include "src/utils/simple_config.h"
 #include <functional>
@@ -22,6 +23,10 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include <sys/stat.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 static const std::unordered_set<std::string> SUPPORT_MODE_PIPELINE = {
     "ocr",
@@ -132,12 +137,63 @@ int main(int argc, char *argv[]) {
   }
   
   auto params = GetPipelineParams();
-  auto outputs = PaddleOCR(params).Predict(input);
+  auto ocr_pipeline = PaddleOCR(params);
   
-  for (auto &output : outputs) {
-    output->Print();
-    output->SaveToImg(save_path);
-    output->SaveToJson(save_path);
+  // 检查输入是文件还是目录
+  std::vector<std::string> image_paths;
+  struct stat st;
+  if (stat(input.c_str(), &st) == 0) {
+    if (st.st_mode & S_IFDIR) {
+      // 是目录，获取目录中的所有图片文件
+      std::vector<std::string> extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"};
+      
+      #ifdef _WIN32
+      WIN32_FIND_DATA findFileData;
+      HANDLE hFind = FindFirstFile((input + "\\*").c_str(), &findFileData);
+      if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+          std::string filename = findFileData.cFileName;
+          if (filename != "." && filename != "..") {
+            std::string full_path = input + "\\" + filename;
+            // 检查文件扩展名
+            for (const auto& ext : extensions) {
+              if (filename.size() >= ext.size() && 
+                  filename.compare(filename.size() - ext.size(), ext.size(), ext) == 0) {
+                image_paths.push_back(full_path);
+                break;
+              }
+            }
+          }
+        } while (FindNextFile(hFind, &findFileData) != 0);
+        FindClose(hFind);
+      }
+      #else
+      // Linux/Unix implementation would go here
+      #endif
+    } else {
+      // 是单个文件
+      image_paths.push_back(input);
+    }
+  } else {
+    INFOE("Input path does not exist: %s", input.c_str());
+    exit(-1);
   }
+  
+  // 逐个处理每张图片并立即输出结果
+  for (const auto& image_path : image_paths) {
+    INFO("Processing image: %s", image_path.c_str());
+    
+    auto outputs = ocr_pipeline.Predict(image_path);
+    
+    for (auto &output : outputs) {
+      output->Print();
+      output->SaveToImg(save_path);
+      output->SaveToJson(save_path);
+      static_cast<OCRResult*>(output.get())->SaveToTxt(save_path);
+    }
+    
+    INFO("Completed processing: %s", image_path.c_str());
+  }
+  
   return 0;
 }

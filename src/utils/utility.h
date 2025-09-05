@@ -104,11 +104,15 @@ public:
   static StatusOr<std::string>
   SmartCreateDirectoryForImage(std::string save_path,
                                const std::string &input_path,
-                               const std::string &suffix = "_res");
+                               const std::string &suffix = "");
   static StatusOr<std::string>
   SmartCreateDirectoryForJson(const std::string &save_path,
                               const std::string &input_path,
-                              const std::string &suffix = "_res");
+                              const std::string &suffix = "");
+  static StatusOr<std::string>
+  SmartCreateDirectoryForText(const std::string &save_path,
+                              const std::string &input_path,
+                              const std::string &suffix = "");
 
   static StatusOr<int> StringToInt(std::string s);
   static bool StringToBool(const std::string &str);

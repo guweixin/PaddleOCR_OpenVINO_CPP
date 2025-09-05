@@ -69,26 +69,25 @@ Utility::FindModelPath(const std::string &model_dir,
 }
 StatusOr<std::string>
 Utility::GetDefaultConfig(std::string pipeline_name) {
-  std::string current_path = __FILE__;
-  for (int i = 0; i < 2; i++) {
-    size_t pos = current_path.find_last_of(PATH_SEPARATOR);
-    if (pos == std::string::npos) {
-      return Status::NotFoundError("Could not find pipline config yaml :" +
-                                 pipeline_name);
-    }
-    current_path = current_path.substr(0, pos);
-  }
-  std::string config_path_yaml = current_path + PATH_SEPARATOR + "configs" +
-                                 PATH_SEPARATOR + pipeline_name + ".yaml";
-  std::string config_path_yml = current_path + PATH_SEPARATOR + "configs" +
-                                PATH_SEPARATOR + pipeline_name + ".yml";
+  // 使用相对于可执行文件的配置路径
+  std::string config_path_yaml = "configs";
+  config_path_yaml += PATH_SEPARATOR;
+  config_path_yaml += pipeline_name;
+  config_path_yaml += ".yaml";
+  
+  std::string config_path_yml = "configs";
+  config_path_yml += PATH_SEPARATOR;
+  config_path_yml += pipeline_name;
+  config_path_yml += ".yml";
+  
   if (FileExists(config_path_yaml).ok()) {
     return config_path_yaml;
   } else if (FileExists(config_path_yml).ok()) {
     return config_path_yml;
   }
-  return Status::NotFoundError("Could not find pipline config yaml :" +
-                             pipeline_name);
+  
+  return Status::NotFoundError("Could not find pipeline config yaml: " +
+                             pipeline_name + " in configs directory");
 }
 StatusOr<std::string>
 Utility::GetConfigPaths(const std::string &model_dir,
@@ -348,6 +347,21 @@ Utility::SmartCreateDirectoryForJson(const std::string &save_path,
   size_t pos = full_path.value().rfind('.');
   if (pos != std::string::npos) {
     full_path.value().replace(pos, std::string::npos, ".json");
+  }
+  return full_path.value();
+}
+
+StatusOr<std::string>
+Utility::SmartCreateDirectoryForText(const std::string &save_path,
+                                     const std::string &input_path,
+                                     const std::string &suffix) {
+  auto full_path = SmartCreateDirectoryForImage(save_path, input_path, suffix);
+  if (!full_path.ok()) {
+    return full_path.status();
+  }
+  size_t pos = full_path.value().rfind('.');
+  if (pos != std::string::npos) {
+    full_path.value().replace(pos, std::string::npos, ".txt");
   }
   return full_path.value();
 }

@@ -370,6 +370,36 @@ void OCRResult::SaveToJson(const std::string &save_path) const {
   }
 }
 
+void OCRResult::SaveToTxt(const std::string &save_path) const {
+  StatusOr<std::string> full_path;
+  if (pipeline_result_.input_path.empty()) {
+    INFOW("Input path is empty, will use output_res.txt instead!");
+    full_path = Utility::SmartCreateDirectoryForText(save_path, "output");
+  } else {
+    full_path = Utility::SmartCreateDirectoryForText(
+        save_path, pipeline_result_.input_path);
+  }
+  if (!full_path.ok()) {
+    INFOE(full_path.status().ToString().c_str());
+    exit(-1);
+  }
+  
+  std::ofstream file(full_path.value());
+  if (file.is_open()) {
+    // 将所有识别的文本逐行写入txt文件
+    for (size_t i = 0; i < pipeline_result_.rec_texts.size(); ++i) {
+      file << pipeline_result_.rec_texts[i];
+      if (i < pipeline_result_.rec_texts.size() - 1) {
+        file << std::endl;  // 每个文本框的内容占一行
+      }
+    }
+    file.close();
+  } else {
+    INFOE("Could not open file for writing: %s", full_path.value().c_str());
+    exit(-1);
+  }
+}
+
 // Removed PrintDocPreprocessorPipelineResult as doc_preprocessor functionality was removed
 
 void PrintPolys(const std::vector<std::vector<cv::Point2f>> &polys) {
