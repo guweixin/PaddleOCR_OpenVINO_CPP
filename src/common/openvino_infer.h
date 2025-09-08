@@ -60,10 +60,6 @@ private:
 
   // NPU specific helpers (three-model architecture)
   NPURecModelSize SelectNPURecModel(const cv::Mat &image) const;
-  NPURecModelSize SelectNPURecModelForBatch(const std::vector<cv::Mat> &images) const;
-
-  StatusOr<cv::Mat> NPURecognitionPreprocessWithPadding(const cv::Mat &image, int target_h, int target_w, NPURecModelSize model_size) const;
-  StatusOr<cv::Mat> NPUDetectionPreprocessWithPadding(const cv::Mat &image, int target_h, int target_w) const;
 
   Status Create();
   Status CheckRunMode();
