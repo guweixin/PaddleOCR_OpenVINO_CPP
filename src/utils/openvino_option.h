@@ -26,7 +26,7 @@ static constexpr const char *DEFAULT_DEVICE = "cpu";
 
 class OpenVinoOption {
 public:
-  const std::vector<std::string> SUPPORT_DEVICE = {"gpu", "cpu"};
+  const std::vector<std::string> SUPPORT_DEVICE = {"gpu", "cpu", "npu"};
 
   const std::string &DeviceType() const;
   int DeviceId() const;

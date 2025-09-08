@@ -23,6 +23,9 @@
 #include "src/utils/ilogger.h"
 #include "src/utils/openvino_option.h"
 
+// NPU recognition model sizes (used by OpenVinoInfer)
+enum class NPURecModelSize { SMALL = 0, MEDIUM = 1, LARGE = 2 };
+
 class OpenVinoInfer {
 public:
   explicit OpenVinoInfer(const std::string &model_name,
@@ -44,9 +47,23 @@ private:
   std::shared_ptr<ov::Model> model_;
   ov::CompiledModel compiled_model_;
   ov::InferRequest infer_request_;
+  // NPU-specific compiled models and infer requests
+  ov::CompiledModel npu_detection_compiled_model_;
+  ov::InferRequest npu_detection_infer_request_;
   
   std::vector<std::string> input_names_;
   std::vector<std::string> output_names_;
+
+  // Cached compiled models for NPU sizes
+  std::unordered_map<NPURecModelSize, ov::CompiledModel> npu_compiled_models_;
+  std::unordered_map<NPURecModelSize, ov::InferRequest> npu_infer_requests_;
+
+  // NPU specific helpers (three-model architecture)
+  NPURecModelSize SelectNPURecModel(const cv::Mat &image) const;
+  NPURecModelSize SelectNPURecModelForBatch(const std::vector<cv::Mat> &images) const;
+
+  StatusOr<cv::Mat> NPURecognitionPreprocessWithPadding(const cv::Mat &image, int target_h, int target_w, NPURecModelSize model_size) const;
+  StatusOr<cv::Mat> NPUDetectionPreprocessWithPadding(const cv::Mat &image, int target_h, int target_w) const;
 
   Status Create();
   Status CheckRunMode();

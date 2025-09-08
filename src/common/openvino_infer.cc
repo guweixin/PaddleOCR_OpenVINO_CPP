@@ -32,11 +32,156 @@ OpenVinoInfer::OpenVinoInfer(const std::string &model_name,
   }
 }
 
+// NPU recognition model selection for a single image
+NPURecModelSize OpenVinoInfer::SelectNPURecModel(const cv::Mat &image) const {
+  if (image.empty() || image.rows <= 0 || image.cols <= 0) return NPURecModelSize::SMALL;
+  float aspect = static_cast<float>(image.cols) / static_cast<float>(image.rows);
+  if (aspect <= 15.0f) return NPURecModelSize::SMALL;
+  if (aspect <= 25.0f) return NPURecModelSize::MEDIUM;
+  return NPURecModelSize::LARGE;
+}
+
+// Batch-based selection: return the model size that best fits the batch (max aspect)
+NPURecModelSize OpenVinoInfer::SelectNPURecModelForBatch(const std::vector<cv::Mat> &images) const {
+  float max_aspect = 0.0f;
+  for (const auto &img : images) {
+    if (img.empty() || img.rows <= 0 || img.cols <= 0) continue;
+    float a = static_cast<float>(img.cols) / static_cast<float>(img.rows);
+    if (a > max_aspect) max_aspect = a;
+  }
+  if (max_aspect <= 15.0f) return NPURecModelSize::SMALL;
+  if (max_aspect <= 25.0f) return NPURecModelSize::MEDIUM;
+  return NPURecModelSize::LARGE;
+}
+
+// NPU recognition preprocessing with padding per model target size and placement strategy
+StatusOr<cv::Mat> OpenVinoInfer::NPURecognitionPreprocessWithPadding(const cv::Mat &image, int target_h, int target_w, NPURecModelSize model_size) const {
+  if (image.empty()) return Status::InvalidArgumentError("Empty image for NPU preprocess");
+
+  // Compute scale
+  float h_scale = static_cast<float>(target_h) / static_cast<float>(image.rows);
+  float w_scale = static_cast<float>(target_w) / static_cast<float>(image.cols);
+  float scale = std::min(h_scale, w_scale);
+
+  int new_h = std::max(1, static_cast<int>(std::round(image.rows * scale)));
+  int new_w = std::max(1, static_cast<int>(std::round(image.cols * scale)));
+
+  cv::Mat resized;
+  cv::resize(image, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
+
+  // Create white canvas
+  cv::Mat canvas(target_h, target_w, image.type(), cv::Scalar(255, 255, 255));
+
+  int x = 0;
+  int y = (target_h - new_h) / 2;
+  if (model_size == NPURecModelSize::LARGE) {
+    // center horizontally
+    x = (target_w - new_w) / 2;
+  } else {
+    // left align
+    x = 0;
+  }
+
+  // boundary checks
+  x = std::max(0, std::min(x, target_w - new_w));
+  y = std::max(0, std::min(y, target_h - new_h));
+
+  // Copy
+  resized.copyTo(canvas(cv::Rect(x, y, new_w, new_h)));
+
+  // Convert to float and normalize similar to CPU path (assume mean/std handled elsewhere)
+  cv::Mat float_mat;
+  if (canvas.type() != CV_32F && canvas.channels() == 3) canvas.convertTo(float_mat, CV_32F);
+  else canvas.convertTo(float_mat, CV_32F);
+
+  return float_mat;
+}
+
+StatusOr<cv::Mat> OpenVinoInfer::NPUDetectionPreprocessWithPadding(const cv::Mat &image, int target_h, int target_w) const {
+  if (image.empty()) return Status::InvalidArgumentError("Empty image for NPU detection preprocess");
+
+  float h_scale = static_cast<float>(target_h) / static_cast<float>(image.rows);
+  float w_scale = static_cast<float>(target_w) / static_cast<float>(image.cols);
+  float scale = std::min(h_scale, w_scale);
+
+  int new_h = std::max(1, static_cast<int>(std::round(image.rows * scale)));
+  int new_w = std::max(1, static_cast<int>(std::round(image.cols * scale)));
+
+  cv::Mat resized;
+  cv::resize(image, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
+
+  cv::Mat canvas(target_h, target_w, image.type(), cv::Scalar(255,255,255));
+
+  // center placement for detection
+  int x = (target_w - new_w) / 2;
+  int y = (target_h - new_h) / 2;
+  x = std::max(0, std::min(x, target_w - new_w));
+  y = std::max(0, std::min(y, target_h - new_h));
+
+  resized.copyTo(canvas(cv::Rect(x, y, new_w, new_h)));
+
+  cv::Mat float_mat;
+  canvas.convertTo(float_mat, CV_32F);
+  return float_mat;
+}
+
 Status OpenVinoInfer::Create() {
   try {
     // Find OpenVINO format files (.xml and .bin)
-    std::string model_path = model_dir_ + "/" + model_file_prefix_ + ".xml";
-    std::string weights_path = model_dir_ + "/" + model_file_prefix_ + ".bin";
+    bool is_detector = model_name_.find("det") != std::string::npos || model_name_.find("Det") != std::string::npos;
+    bool is_recognizer = model_name_.find("rec") != std::string::npos || model_name_.find("Rec") != std::string::npos;
+    
+    std::string model_path;
+    std::string weights_path;
+
+    // Set device
+    std::string device;
+    if (option_.DeviceType() == "gpu"){ device = "GPU";}
+    else if (option_.DeviceType() == "npu") {device = "NPU"; }// OpenVINO NPU plugin
+    else{device = "CPU";}
+    
+    // Configure compilation options
+    ov::AnyMap config;
+    if (device == "CPU") {
+      config["NUM_STREAMS"] = std::to_string(option_.CpuThreads());
+    } else{
+      config["INFERENCE_PRECISION_HINT"] = "f16";
+      config["CACHE_DIR"] = "./openvino_cache";
+    }
+
+    if (device == "NPU" && is_detector){
+      model_path = model_dir_ + "/inference_960.xml";
+      weights_path = model_dir_ + "/inference_960.bin";
+    }else if(device == "NPU" && is_recognizer){
+        struct RecSpec { NPURecModelSize size; const char* file; } specs[] = {
+          {NPURecModelSize::SMALL, "inference_480"},
+          {NPURecModelSize::MEDIUM, "inference_800"},
+          {NPURecModelSize::LARGE, "inference_1280"}
+        };
+
+        for (const auto &s : specs) {
+          std::string rec_path = model_dir_ + "/" + s.file + ".xml";
+          std::string rec_weights = model_dir_ + "/" + s.file + ".bin";
+          if (!Utility::FileExists(rec_path).ok() || !Utility::FileExists(rec_weights).ok()) {
+            std::cout << "[WARNING] NPU recognition model files not found: " << rec_path << std::endl;
+            continue;
+          }
+          try {
+            auto rec_model = core_.read_model(rec_path, rec_weights);
+            auto compiled = core_.compile_model(rec_model, device);
+            npu_compiled_models_[s.size] = compiled;
+            npu_infer_requests_[s.size] = compiled.create_infer_request();
+            std::cout << "[INFO] NPU recognition model loaded: " << rec_path << std::endl;
+          } catch (const std::exception &e) {
+            std::cout << "[WARNING] Failed to load NPU recognition model " << rec_path << ": " << e.what() << std::endl;
+          }      
+        }
+      return Status::OK();
+    }
+    else{
+      model_path = model_dir_ + "/" + model_file_prefix_ + ".xml";
+      weights_path = model_dir_ + "/" + model_file_prefix_ + ".bin";
+    }
     
     // Check if OpenVINO files exist
     auto model_status = Utility::FileExists(model_path);
@@ -58,21 +203,11 @@ Status OpenVinoInfer::Create() {
       return Status::InternalError("Failed to read OpenVINO model");
     }
     
-    // Set device
-    std::string device = (option_.DeviceType() == "gpu") ? "GPU" : "CPU";
-    
-    // Configure compilation options
-    ov::AnyMap compile_options;
-    if (device == "CPU") {
-      compile_options["NUM_STREAMS"] = std::to_string(option_.CpuThreads());
-    }
-    
     // Compile the model
-    compiled_model_ = core_.compile_model(model_, device, compile_options);
+    compiled_model_ = core_.compile_model(model_, device, config);
     infer_request_ = compiled_model_.create_infer_request();
     
-    // Get input/output names
-    
+    // Get input/output names    
     for (const auto& input : model_->inputs()) {
       std::string input_name = input.get_any_name();
       input_names_.push_back(input_name);
@@ -146,6 +281,160 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
     
     // For dynamic shapes or when input size changes, we need to reshape the model
     ov::Shape input_shape;
+
+    // If device is NPU, handle detection and recognition using NPU-specific compiled models
+    if (option_.DeviceType() == "npu") {
+      // Detection model path
+      if (model_name_.find("det") != std::string::npos || model_name_.find("Det") != std::string::npos) {
+        if (!npu_detection_infer_request_) {
+          std::cout << "[ERROR] NPU detection infer request not available" << std::endl;
+          return Status::InternalError("NPU detection infer request not available");
+        }
+        // For simplicity reuse existing pipeline: assume input_mats contains proper images
+        // Preprocess each image same as CPU but using detection padding target 960x32
+        std::vector<cv::Mat> preprocessed;
+        for (const auto &im : input_mats) {
+          auto status_mat = NPUDetectionPreprocessWithPadding(im, 32, 960);
+          if (!status_mat.ok()) return status_mat.status();
+          preprocessed.push_back(status_mat.value());
+        }
+
+        // For NPU detection, we expect batch size 1 per design; process sequentially
+        std::vector<cv::Mat> results_all;
+        for (const auto &pp : preprocessed) {
+          // reshape model to [1,C,H,W] if needed
+          auto req = npu_detection_infer_request_;
+          auto tensor = req.get_input_tensor();
+          float* data_ptr = tensor.data<float>();
+          size_t total_elems = tensor.get_size();
+          if (pp.total() * pp.channels() != total_elems) {
+            // Try to convert and flatten
+            cv::Mat flat;
+            pp.convertTo(flat, CV_32F);
+            if (static_cast<size_t>(flat.total() * flat.channels()) != total_elems) {
+              std::cout << "[ERROR] NPU detection input size mismatch" << std::endl;
+              return Status::InternalError("NPU detection input size mismatch");
+            }
+            std::memcpy(data_ptr, flat.data, total_elems * sizeof(float));
+          } else {
+            cv::Mat flat;
+            pp.convertTo(flat, CV_32F);
+            std::memcpy(data_ptr, flat.data, total_elems * sizeof(float));
+          }
+
+          try { req.infer(); } catch (const std::exception &e) {
+            std::cout << "[ERROR] NPU detection inference failed: " << e.what() << std::endl;
+            return Status::InternalError("NPU detection inference failed: " + std::string(e.what()));
+          }
+
+          // Collect outputs similar to CPU path
+          for (size_t output_idx = 0; output_idx < output_names_.size(); ++output_idx) {
+            auto output_tensor = req.get_output_tensor(output_idx);
+            auto output_shape = output_tensor.get_shape();
+            // reuse existing output handling from below by constructing cv::Mat
+            if (output_shape.size() == 4) {
+              size_t out_batch = output_shape[0];
+              size_t out_channels = output_shape[1];
+              size_t out_height = output_shape[2];
+              size_t out_width = output_shape[3];
+              float* output_data = output_tensor.data<float>();
+              for (size_t b = 0; b < out_batch; ++b) {
+                cv::Mat outm(static_cast<int>(out_height), static_cast<int>(out_width), CV_32FC(static_cast<int>(out_channels)));
+                std::memcpy(outm.data, output_data + b * out_channels * out_height * out_width, out_channels * out_height * out_width * sizeof(float));
+                results_all.push_back(outm);
+              }
+            } else if (output_shape.size() == 3) {
+              size_t out_batch = output_shape[0];
+              size_t out_sequence = output_shape[1];
+              size_t out_classes = output_shape[2];
+              int sizes[] = {static_cast<int>(out_batch), static_cast<int>(out_sequence), static_cast<int>(out_classes)};
+              cv::Mat outm(3, sizes, CV_32F);
+              float* output_data = output_tensor.data<float>();
+              size_t total_elems = out_batch * out_sequence * out_classes;
+              std::memcpy(outm.data, output_data, total_elems * sizeof(float));
+              results_all.push_back(outm);
+            } else if (output_shape.size() == 2) {
+              size_t out_batch = output_shape[0];
+              size_t out_features = output_shape[1];
+              float* output_data = output_tensor.data<float>();
+              for (size_t b = 0; b < out_batch; ++b) {
+                cv::Mat outm(1, static_cast<int>(out_features), CV_32F);
+                std::memcpy(outm.data, output_data + b * out_features, out_features * sizeof(float));
+                results_all.push_back(outm);
+              }
+            }
+          }
+        }
+
+        return results_all;
+      }
+
+      // Recognition model path on NPU: process each image sequentially with selected model
+      if (model_name_.find("rec") != std::string::npos || model_name_.find("Rec") != std::string::npos) {
+        std::vector<cv::Mat> all_results;
+        for (const auto &im : input_mats) {
+          NPURecModelSize choose = SelectNPURecModel(im);
+          int target_w = 480;
+          if (choose == NPURecModelSize::MEDIUM) target_w = 800;
+          if (choose == NPURecModelSize::LARGE) target_w = 1280;
+          auto prep_status = NPURecognitionPreprocessWithPadding(im, 32, target_w, choose);
+          if (!prep_status.ok()) return prep_status.status();
+          cv::Mat pre = prep_status.value();
+
+          // get the infer request for the chosen model
+          auto it = npu_infer_requests_.find(choose);
+          if (it == npu_infer_requests_.end()) {
+            std::cout << "[ERROR] No compiled NPU model for chosen size" << std::endl;
+            return Status::InternalError("No compiled NPU model for chosen size");
+          }
+          auto req = it->second;
+
+          auto tensor = req.get_input_tensor();
+          float* data_ptr = tensor.data<float>();
+          size_t total_elems = tensor.get_size();
+
+          cv::Mat flat;
+          pre.convertTo(flat, CV_32F);
+          if (static_cast<size_t>(flat.total() * flat.channels()) != total_elems) {
+            std::cout << "[ERROR] NPU recognition input size mismatch" << std::endl;
+            return Status::InternalError("NPU recognition input size mismatch");
+          }
+          std::memcpy(data_ptr, flat.data, total_elems * sizeof(float));
+
+          try { req.infer(); } catch (const std::exception &e) {
+            std::cout << "[ERROR] NPU recognition inference failed: " << e.what() << std::endl;
+            return Status::InternalError("NPU recognition inference failed: " + std::string(e.what()));
+          }
+
+          // collect outputs (take first output tensor)
+          for (size_t output_idx = 0; output_idx < output_names_.size(); ++output_idx) {
+            auto output_tensor = req.get_output_tensor(output_idx);
+            auto output_shape = output_tensor.get_shape();
+            if (output_shape.size() == 3) {
+              size_t out_batch = output_shape[0];
+              size_t out_sequence = output_shape[1];
+              size_t out_classes = output_shape[2];
+              int sizes[] = {static_cast<int>(out_batch), static_cast<int>(out_sequence), static_cast<int>(out_classes)};
+              cv::Mat outm(3, sizes, CV_32F);
+              float* output_data = output_tensor.data<float>();
+              size_t total_elems = out_batch * out_sequence * out_classes;
+              std::memcpy(outm.data, output_data, total_elems * sizeof(float));
+              all_results.push_back(outm);
+            } else if (output_shape.size() == 2) {
+              size_t out_batch = output_shape[0];
+              size_t out_features = output_shape[1];
+              float* output_data = output_tensor.data<float>();
+              for (size_t b = 0; b < out_batch; ++b) {
+                cv::Mat outm(1, static_cast<int>(out_features), CV_32F);
+                std::memcpy(outm.data, output_data + b * out_features, out_features * sizeof(float));
+                all_results.push_back(outm);
+              }
+            }
+          }
+        }
+        return all_results;
+      }
+    }
     
     // Determine the input shape based on the actual data layout
     if (first_mat.dims == 4) {
