@@ -24,6 +24,8 @@ struct TextRecognitionParams {
   std::optional<std::string> vis_font_dir = std::nullopt;
   std::optional<std::string> device = std::nullopt;
   std::string precision = "fp32";
+  bool enable_mkldnn = true;
+  int mkldnn_cache_capacity = 10;
   int cpu_threads = 8;
   int batch_size = 1;
   std::optional<std::vector<int>> input_shape = std::nullopt;

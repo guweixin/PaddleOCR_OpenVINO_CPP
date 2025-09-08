@@ -79,7 +79,8 @@ private:
 
 class Normalize : public BaseProcessor {
 public:
-  Normalize(float scale = 1.0 / 255.0,
+  Normalize(float scale = 1.0 / 
+    .0,
             const std::vector<float> &mean = {0.5, 0.5, 0.5},
             const std::vector<float> &std = {0.5, 0.5, 0.5});
   Normalize(float scale = 1.0 / 255.0, const float &mean = 0.5,

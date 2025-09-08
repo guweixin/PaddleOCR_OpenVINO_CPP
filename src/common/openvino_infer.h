@@ -17,6 +17,8 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <unordered_map>
 
 #include "src/utils/status.h"
 #include "openvino/openvino.hpp"
@@ -37,6 +39,12 @@ public:
   StatusOr<std::vector<cv::Mat>>
   Apply(const std::vector<cv::Mat> &x);
 
+  // Get device type for conditional logic
+  std::string GetDeviceType() const { return option_.DeviceType(); }
+
+  // Get the last NPU mapping ratios for coordinate restoration
+  std::vector<std::pair<float, float>> GetLastNpuRatios() const { return last_npu_ratios_; }
+
 private:
   std::string model_dir_;
   std::string model_file_prefix_;
@@ -47,21 +55,30 @@ private:
   std::shared_ptr<ov::Model> model_;
   ov::CompiledModel compiled_model_;
   ov::InferRequest infer_request_;
-  // NPU-specific compiled models and infer requests
-  ov::CompiledModel npu_detection_compiled_model_;
-  ov::InferRequest npu_detection_infer_request_;
   
   std::vector<std::string> input_names_;
   std::vector<std::string> output_names_;
-
-  // Cached compiled models for NPU sizes
+  
+  // NPU-specific compiled models and infer requests
   std::unordered_map<NPURecModelSize, ov::CompiledModel> npu_compiled_models_;
   std::unordered_map<NPURecModelSize, ov::InferRequest> npu_infer_requests_;
 
-  // NPU specific helpers (three-model architecture)
-  NPURecModelSize SelectNPURecModel(const cv::Mat &image) const;
+  // NPU detection model (single model)
+  ov::CompiledModel npu_detection_compiled_model_;
+  ov::InferRequest npu_detection_infer_request_;
+  
+  // NPU preprocessing: scale and pad image to target size, return processed image and mapping ratios
+  StatusOr<std::tuple<cv::Mat, float, float>> NPUScaleAndPad(const cv::Mat &image, int target_h, int target_w) const;
 
   Status Create();
   Status CheckRunMode();
+  
+private:
+  // Storage for NPU coordinate mapping ratios (ratio_h, ratio_w) for each image in the last batch
+  std::vector<std::pair<float, float>> last_npu_ratios_;
+  
+  // Model type identification
+  bool is_detector_;
+  bool is_recognizer_;
 };
 

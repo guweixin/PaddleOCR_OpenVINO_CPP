@@ -1,4 +1,6 @@
-﻿#ifndef STATUS_H_
+﻿
+
+#ifndef STATUS_H_
 #define STATUS_H_
 
 #include <string>

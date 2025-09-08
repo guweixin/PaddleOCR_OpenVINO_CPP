@@ -23,6 +23,7 @@ struct TextDetectionParams {
   std::string precision = "fp32";
   int cpu_threads = 8;
   int batch_size = 1;
+  
   std::optional<int> limit_side_len = std::nullopt;
   std::optional<std::string> limit_type = std::nullopt;
   std::optional<int> max_side_limit = std::nullopt;

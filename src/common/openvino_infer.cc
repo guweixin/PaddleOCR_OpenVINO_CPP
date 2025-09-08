@@ -21,7 +21,8 @@ OpenVinoInfer::OpenVinoInfer(const std::string &model_name,
                              const std::string &model_file_prefix,
                              const OpenVinoOption &option)
     : model_name_(model_name), model_dir_(model_dir), 
-      model_file_prefix_(model_file_prefix), option_(option) {
+      model_file_prefix_(model_file_prefix), option_(option),
+      is_detector_(false), is_recognizer_(false) {
   std::cout << "[INFO] OpenVinoInfer initialized for model: " << model_name_ << std::endl;
   
   // Initialize the model immediately
@@ -32,20 +33,144 @@ OpenVinoInfer::OpenVinoInfer(const std::string &model_name,
   }
 }
 
-// NPU recognition model selection for a single image
-NPURecModelSize OpenVinoInfer::SelectNPURecModel(const cv::Mat &image) const {
-  if (image.empty() || image.rows <= 0 || image.cols <= 0) return NPURecModelSize::SMALL;
-  float aspect = static_cast<float>(image.cols) / static_cast<float>(image.rows);
-  if (aspect <= 15.0f) return NPURecModelSize::SMALL;
-  if (aspect <= 25.0f) return NPURecModelSize::MEDIUM;
-  return NPURecModelSize::LARGE;
+
+
+// NPU preprocessing: simple equal proportion scaling and zero-padding
+StatusOr<std::tuple<cv::Mat, float, float>> OpenVinoInfer::NPUScaleAndPad(const cv::Mat &image, int target_h, int target_w) const {
+  if (image.empty()) {
+    return Status::InvalidArgumentError("Empty image for NPUScaleAndPad");
+  }
+
+  if (target_h <= 0 || target_w <= 0) {
+    std::cout << "[ERROR] Invalid target dimensions in NPUScaleAndPad: target_h=" << target_h << ", target_w=" << target_w << std::endl;
+    return Status::InvalidArgumentError("Invalid target dimensions for NPUScaleAndPad");
+  }
+
+  // Extract source dimensions - handle various input formats
+  int src_h = 0, src_w = 0, channels = 0;
+  cv::Mat input_image;
+
+  if (image.dims == 2) {
+    // 2D grayscale image
+    src_h = image.rows;
+    src_w = image.cols;
+    channels = image.channels();
+    input_image = image;
+  } else if (image.dims == 3) {
+    // 3D tensor - check if it's CHW or HWC format
+    int dim0 = static_cast<int>(image.size[0]);
+    int dim1 = static_cast<int>(image.size[1]);
+    int dim2 = static_cast<int>(image.size[2]);
+    
+    if (dim0 == 3 || dim0 == 1) {
+      // CHW format: [C, H, W] - common for preprocessed data
+      channels = dim0;
+      src_h = dim1;
+      src_w = dim2;
+      
+      std::cout << "[DEBUG] NPUScaleAndPad: Detected CHW format [" << channels << "," << src_h << "," << src_w << "]" << std::endl;
+      
+      // Convert CHW to HWC for OpenCV processing
+      std::vector<cv::Mat> channel_mats;
+      for (int c = 0; c < channels; ++c) {
+        cv::Range ranges[3] = {cv::Range(c, c+1), cv::Range::all(), cv::Range::all()};
+        cv::Mat channel = image(ranges).clone();
+        channel = channel.reshape(1, src_h); // Convert to 2D [H, W]
+        channel_mats.push_back(channel);
+      }
+      
+      if (channels == 1) {
+        input_image = channel_mats[0];
+      } else if (channels == 3) {
+        cv::merge(channel_mats, input_image);
+      } else {
+        return Status::InvalidArgumentError("Unsupported channel count in CHW format");
+      }
+    } else if (dim2 == 3 || dim2 == 1) {
+      // HWC format: [H, W, C]
+      src_h = dim0;
+      src_w = dim1;
+      channels = dim2;
+      input_image = image;
+    } else {
+      return Status::InvalidArgumentError("Cannot determine CHW/HWC format for 3D tensor");
+    }
+  } else if (image.rows > 0 && image.cols > 0) {
+    // Standard 2D image with channels
+    src_h = image.rows;
+    src_w = image.cols;
+    channels = image.channels();
+    input_image = image;
+  } else {
+    return Status::InvalidArgumentError("Unsupported image format for NPUScaleAndPad");
+  }
+
+  if (src_h <= 0 || src_w <= 0) {
+    return Status::InvalidArgumentError("Invalid source image dimensions");
+  }
+
+  std::cout << "[DEBUG] NPUScaleAndPad: Processed input - src(" << src_w << "x" << src_h 
+            << "), channels=" << channels << ", input_image size(" << input_image.cols << "x" << input_image.rows << ")" << std::endl;
+
+  // Calculate equal proportion scaling - ensure not exceeding target dimensions
+  float scale_h = static_cast<float>(target_h) / static_cast<float>(src_h);
+  float scale_w = static_cast<float>(target_w) / static_cast<float>(src_w);
+  float scale = std::min(scale_h, scale_w);  // Equal proportion scaling
+  
+  // Calculate new dimensions after scaling
+  int new_h = static_cast<int>(std::round(src_h * scale));
+  int new_w = static_cast<int>(std::round(src_w * scale));
+  
+  // Ensure new dimensions do not exceed target dimensions
+  if (new_h > target_h) new_h = target_h;
+  if (new_w > target_w) new_w = target_w;
+  
+  std::cout << "[DEBUG] NPUScaleAndPad: src(" << src_w << "x" << src_h 
+            << ") -> target(" << target_w << "x" << target_h 
+            << "), scale=" << scale << ", new_size(" << new_w << "x" << new_h << ")" << std::endl;
+
+  // Step 1: Resize to new dimensions
+  cv::Mat resized;
+  cv::resize(input_image, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
+
+  // Step 2: Create zero-padded result with target dimensions
+  cv::Mat result;
+  if (channels == 1) {
+    result = cv::Mat::zeros(target_h, target_w, CV_8UC1);
+  } else if (channels == 3) {
+    result = cv::Mat::zeros(target_h, target_w, CV_8UC3);
+  } else {
+    return Status::InvalidArgumentError("Unsupported channel count for NPUScaleAndPad");
+  }
+
+  // Step 3: Place resized image in center of zero-padded result
+  int offset_y = (target_h - new_h) / 2;
+  int offset_x = (target_w - new_w) / 2;
+  
+  // Ensure valid ROI bounds
+  if (offset_y >= 0 && offset_x >= 0 && 
+      offset_y + new_h <= target_h && offset_x + new_w <= target_w) {
+    cv::Rect roi(offset_x, offset_y, new_w, new_h);
+    resized.copyTo(result(roi));
+  } else {
+    return Status::InvalidArgumentError("Invalid ROI bounds for NPUScaleAndPad");
+  }
+
+  // Calculate mapping ratios for coordinate restoration
+  float ratio_h = 1.0f / scale;
+  float ratio_w = 1.0f / scale;
+
+  std::cout << "[DEBUG] NPUScaleAndPad: result shape[" << result.cols << "x" << result.rows 
+            << "], channels=" << result.channels() << ", ratios(h=" << ratio_h << ", w=" << ratio_w << ")" << std::endl;
+
+  return std::make_tuple(result, ratio_h, ratio_w);
 }
 
 Status OpenVinoInfer::Create() {
   try {
     // Find OpenVINO format files (.xml and .bin)
-    bool is_detector = model_name_.find("det") != std::string::npos || model_name_.find("Det") != std::string::npos;
-    bool is_recognizer = model_name_.find("rec") != std::string::npos || model_name_.find("Rec") != std::string::npos;
+    is_detector_ = model_name_.find("det") != std::string::npos || model_name_.find("Det") != std::string::npos;
+    is_recognizer_ = model_name_.find("rec") != std::string::npos || model_name_.find("Rec") != std::string::npos;
     
     std::string model_path;
     std::string weights_path;
@@ -65,10 +190,10 @@ Status OpenVinoInfer::Create() {
       config["CACHE_DIR"] = "./openvino_cache";
     }
 
-    if (device == "NPU" && is_detector){
+    if (device == "NPU" && is_detector_){
       model_path = model_dir_ + "/inference_960.xml";
       weights_path = model_dir_ + "/inference_960.bin";
-    }else if(device == "NPU" && is_recognizer){
+    }else if(device == "NPU" && is_recognizer_){
         struct RecSpec { NPURecModelSize size; const char* file; } specs[] = {
           {NPURecModelSize::SMALL, "inference_480"},
           {NPURecModelSize::MEDIUM, "inference_800"},
@@ -88,11 +213,43 @@ Status OpenVinoInfer::Create() {
             npu_compiled_models_[s.size] = compiled;
             npu_infer_requests_[s.size] = compiled.create_infer_request();
             std::cout << "[INFO] NPU recognition model loaded: " << rec_path << std::endl;
+            
+            // Set the first loaded model as the main model for compatibility
+            if (!model_) {
+              model_ = rec_model;
+              compiled_model_ = compiled;
+              infer_request_ = compiled.create_infer_request();
+            }
           } catch (const std::exception &e) {
             std::cout << "[WARNING] Failed to load NPU recognition model " << rec_path << ": " << e.what() << std::endl;
           }      
         }
-      return Status::OK();
+        
+        // Ensure at least one model was loaded
+        if (npu_compiled_models_.empty()) {
+          return Status::InternalError("No NPU recognition models could be loaded");
+        }
+        
+        // Get input/output names from the main model    
+        for (const auto& input : model_->inputs()) {
+          std::string input_name = input.get_any_name();
+          input_names_.push_back(input_name);
+        }
+        for (const auto& output : model_->outputs()) {
+          std::string output_name = output.get_any_name();
+          output_names_.push_back(output_name);
+        }
+        
+        if (input_names_.empty()) {
+          std::cout << "[ERROR] No input tensors found in the NPU recognition model!" << std::endl;
+          return Status::InternalError("No input tensors found in the NPU recognition model");
+        }
+        
+        std::cout << "[INFO] NPU recognition models loaded successfully. Device: " << device 
+                  << ", Models: " << npu_compiled_models_.size() 
+                  << ", Inputs: " << input_names_.size() << ", Outputs: " << output_names_.size() << std::endl;
+                  
+        return Status::OK();
     }
     else{
       model_path = model_dir_ + "/" + model_file_prefix_ + ".xml";
@@ -159,6 +316,18 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
     return Status::InvalidArgumentError("Input matrices are empty");
   }
   
+  std::cout << "[DEBUG] Apply called with " << input_mats.size() << " input images" << std::endl;
+  std::cout << "[DEBUG] Device type: " << option_.DeviceType() << ", is_recognizer: " << is_recognizer_ << ", is_detector: " << is_detector_ << std::endl;
+  
+  // Debug first input image
+  if (!input_mats.empty()) {
+    const auto& first = input_mats[0];
+    std::cout << "[DEBUG] First input image: dims=" << first.dims 
+              << ", rows=" << first.rows << ", cols=" << first.cols 
+              << ", channels=" << first.channels() << ", type=" << first.type() 
+              << ", empty=" << first.empty() << std::endl;
+  }
+  
   try {
     // Prepare input tensor
     if (input_names_.empty()) {
@@ -170,8 +339,315 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
     // Get the first input for shape analysis
     auto input_partial_shape = model_->input().get_partial_shape();
     
-    // Analyze the input data format
-    const cv::Mat& first_mat = input_mats[0];
+    // NPU recognition: Force batch size = 1, process each image individually
+    if (option_.DeviceType() == "npu" && is_recognizer_) {
+      std::vector<cv::Mat> all_outputs;
+      last_npu_ratios_.clear();
+      
+      std::cout << "[DEBUG] NPU recognition: Force batch size=1, processing " << input_mats.size() << " images individually" << std::endl;
+      
+      // Process each image with batch size = 1
+      for (size_t img_idx = 0; img_idx < input_mats.size(); ++img_idx) {
+        const auto &img = input_mats[img_idx];
+        
+        // Validate input image
+        if (img.empty()) {
+          std::cout << "[ERROR] Empty input image " << img_idx << std::endl;
+          return Status::InvalidArgumentError("Empty input image");
+        }
+        
+        // Extract source dimensions for aspect ratio calculation
+        int src_h = 0, src_w = 0;
+        if (img.dims == 3) {
+          if (img.size[0] == 3 || img.size[0] == 1) {
+            // CHW format: [C, H, W]
+            src_h = static_cast<int>(img.size[1]);
+            src_w = static_cast<int>(img.size[2]);
+          } else {
+            // HWC format: [H, W, C]
+            src_h = static_cast<int>(img.size[0]);
+            src_w = static_cast<int>(img.size[1]);
+          }
+        } else if (img.dims == 2) {
+          src_h = img.rows;
+          src_w = img.cols;
+        } else {
+          return Status::InvalidArgumentError("Unsupported image format for NPU recognition");
+        }
+        
+        if (src_h <= 0 || src_w <= 0) {
+          std::cout << "[ERROR] Invalid source dimensions: " << src_w << "x" << src_h << std::endl;
+          return Status::InvalidArgumentError("Invalid source image dimensions");
+        }
+        
+        // Calculate aspect ratio for model selection
+        float aspect_ratio = static_cast<float>(src_w) / static_cast<float>(src_h);
+        
+        // Model specifications and thresholds
+        const int target_height = 48;  // Standard OCR recognition height
+        const int small_width = 480;   // Small model width
+        const int medium_width = 800;  // Medium model width
+        const int large_width = 1280;  // Large model width
+        
+        // Calculate thresholds: model_width / target_height
+        float small_threshold = static_cast<float>(small_width) / static_cast<float>(target_height);    // 480/48 = 10.0
+        float medium_threshold = static_cast<float>(medium_width) / static_cast<float>(target_height);  // 800/48 = 16.67
+        
+        // Select model type based on aspect ratio comparison
+        NPURecModelSize selected_model_type;
+        int target_w = 0;
+        
+        if (aspect_ratio <= small_threshold) {
+          selected_model_type = NPURecModelSize::SMALL;  // model_type = 0
+          target_w = small_width;
+        } else if (aspect_ratio <= medium_threshold) {
+          selected_model_type = NPURecModelSize::MEDIUM; // model_type = 1
+          target_w = medium_width;
+        } else {
+          selected_model_type = NPURecModelSize::LARGE;  // model_type = 2
+          target_w = large_width;
+        }
+        
+        std::cout << "[DEBUG] NPU image " << img_idx << ": src(" << src_w << "x" << src_h 
+                  << "), aspect_ratio=" << aspect_ratio 
+                  << ", thresholds(small=" << small_threshold << ", medium=" << medium_threshold << ")"
+                  << ", selected_model=" << static_cast<int>(selected_model_type) 
+                  << ", target_size(" << target_w << "x" << target_height << ")" << std::endl;
+        
+        // Check if the selected model is available
+        if (npu_compiled_models_.find(selected_model_type) == npu_compiled_models_.end() ||
+            npu_infer_requests_.find(selected_model_type) == npu_infer_requests_.end()) {
+          return Status::InternalError("Selected NPU recognition model not available");
+        }
+        
+        auto& selected_infer_request = npu_infer_requests_[selected_model_type];
+        
+        // NPU preprocessing: scale and pad to BLACK canvas RGB(0,0,0)
+        auto preprocess_result = NPUScaleAndPad(img, target_height, target_w);
+        if (!preprocess_result.ok()) {
+          std::cout << "[ERROR] NPU preprocessing failed: " << preprocess_result.status().message() << std::endl;
+          return preprocess_result.status();
+        }
+        
+        auto [processed_img, ratio_h, ratio_w] = *preprocess_result;
+        last_npu_ratios_.push_back({ratio_h, ratio_w});
+        
+        // Standard recognition preprocessing (same as CPU)
+        // 1. Convert to float32 and normalize: (pixel / 255.0 - 0.5) / 0.5
+        cv::Mat normalized_img;
+        processed_img.convertTo(normalized_img, CV_32F, 1.0/255.0);
+        normalized_img = (normalized_img - cv::Scalar(0.5, 0.5, 0.5)) / cv::Scalar(0.5, 0.5, 0.5);
+        
+        // Debug output for processed image dimensions
+        std::string size_info;
+        if (processed_img.dims == 2) {
+          size_info = std::to_string(processed_img.cols) + "x" + std::to_string(processed_img.rows);
+        } else if (processed_img.dims == 3) {
+          size_info = "[" + std::to_string(processed_img.size[0]) + "," + 
+                      std::to_string(processed_img.size[1]) + "," + 
+                      std::to_string(processed_img.size[2]) + "]";
+        } else {
+          size_info = "dims=" + std::to_string(processed_img.dims);
+        }
+        
+        std::cout << "[DEBUG] NPU preprocessing " << img_idx << ": processed_img shape=" << size_info
+                  << ", type=" << processed_img.type()
+                  << ", normalized range=[" << *std::min_element(reinterpret_cast<const float*>(normalized_img.data), 
+                     reinterpret_cast<const float*>(normalized_img.data) + normalized_img.total() * normalized_img.channels())
+                  << ", " << *std::max_element(reinterpret_cast<const float*>(normalized_img.data), 
+                     reinterpret_cast<const float*>(normalized_img.data) + normalized_img.total() * normalized_img.channels()) << "]" << std::endl;
+        
+        // 2. Handle CHW/HWC format for channel splitting
+        std::vector<cv::Mat> channels;
+        
+        if (normalized_img.dims == 3) {
+          // 3D tensor - check format and split accordingly
+          if (normalized_img.size[0] == 3 || normalized_img.size[0] == 1) {
+            // CHW format: already in CHW, extract channels differently
+            int num_channels = normalized_img.size[0];
+            int height = normalized_img.size[1];
+            int width = normalized_img.size[2];
+            
+            for (int c = 0; c < num_channels; ++c) {
+              cv::Range ranges[3] = {cv::Range(c, c+1), cv::Range::all(), cv::Range::all()};
+              cv::Mat channel = normalized_img(ranges).clone();
+              channel = channel.reshape(1, height);  // Convert to 2D [H, W]
+              channels.push_back(channel);
+            }
+            
+            std::cout << "[DEBUG] NPU CHW tensor split into " << channels.size() << " channels" << std::endl;
+          } else {
+            // HWC format: use normal split
+            cv::split(normalized_img, channels);
+            std::cout << "[DEBUG] NPU HWC tensor split into " << channels.size() << " channels" << std::endl;
+          }
+        } else {
+          // 2D image: use normal split
+          cv::split(normalized_img, channels);
+          std::cout << "[DEBUG] NPU 2D image split into " << channels.size() << " channels" << std::endl;
+        }
+        
+        // Validate channel count
+        if (channels.size() != 3) {
+          std::cout << "[ERROR] Expected 3 channels, got " << channels.size() << std::endl;
+          return Status::InvalidArgumentError("Invalid channel count for NPU recognition");
+        }
+        
+        // 3. Create CHW tensor: [C, H, W] using proper memory layout
+        int total_elements = target_height * target_w;
+        
+        // Create CHW data in proper order: RRRRR...GGGGG...BBBBB...
+        std::vector<float> chw_data(3 * total_elements);
+        
+        for (int ch = 0; ch < 3; ++ch) {
+          const float* channel_data = reinterpret_cast<const float*>(channels[ch].data);
+          std::memcpy(&chw_data[ch * total_elements], channel_data, total_elements * sizeof(float));
+        }
+        
+        std::cout << "[DEBUG] NPU CHW conversion " << img_idx << ": created CHW data, size=" 
+                  << chw_data.size() << ", elements_per_channel=" << total_elements << std::endl;
+        
+        // 4. Create OpenVINO input tensor with batch size = 1
+        ov::Shape tensor_shape = {1, 3, static_cast<size_t>(target_height), static_cast<size_t>(target_w)};
+        ov::Tensor input_tensor(ov::element::f32, tensor_shape);
+        
+        float* tensor_data = input_tensor.data<float>();
+        std::memcpy(tensor_data, chw_data.data(), chw_data.size() * sizeof(float));
+        
+        // 5. Set input tensor and perform inference (batch size = 1)
+        selected_infer_request.set_input_tensor(input_tensor);
+        
+        std::cout << "[DEBUG] NPU inference " << img_idx << ": input tensor shape[" 
+                  << tensor_shape[0] << "," << tensor_shape[1] << "," << tensor_shape[2] << "," << tensor_shape[3] << "]"
+                  << ", model=" << static_cast<int>(selected_model_type) << std::endl;
+        
+        try {
+          selected_infer_request.infer();
+          std::cout << "[DEBUG] NPU inference " << img_idx << ": completed successfully" << std::endl;
+        } catch (const std::exception& e) {
+          std::cout << "[ERROR] NPU inference " << img_idx << " failed: " << e.what() << std::endl;
+          return Status::InternalError("NPU recognition inference failed: " + std::string(e.what()));
+        }
+        
+        // 6. Get output tensor
+        ov::Tensor output_tensor = selected_infer_request.get_output_tensor();
+        ov::Shape output_shape = output_tensor.get_shape();
+        const float* output_data = output_tensor.data<float>();
+        
+        std::cout << "[DEBUG] NPU output " << img_idx << ": shape[";
+        for (size_t i = 0; i < output_shape.size(); ++i) {
+          std::cout << output_shape[i];
+          if (i < output_shape.size() - 1) std::cout << ",";
+        }
+        std::cout << "], elements=" << output_tensor.get_size() << std::endl;
+        
+        // Check output data validity
+        if (output_tensor.get_size() > 0) {
+          float min_val = *std::min_element(output_data, output_data + output_tensor.get_size());
+          float max_val = *std::max_element(output_data, output_data + output_tensor.get_size());
+          std::cout << "[DEBUG] NPU output " << img_idx << ": data_range=[" << min_val << ", " << max_val << "]" << std::endl;
+        }
+        
+        // 7. Convert output to cv::Mat for further processing
+        if (output_shape.size() == 3) {
+          // Expected shape: [batch=1, sequence_length, num_classes]
+          int seq_len = static_cast<int>(output_shape[1]);
+          int num_classes = static_cast<int>(output_shape[2]);
+          
+          if (output_shape[0] != 1) {
+            std::cout << "[WARNING] NPU output batch size != 1: " << output_shape[0] << std::endl;
+          }
+          
+          cv::Mat output_mat(seq_len, num_classes, CV_32F);
+          std::memcpy(output_mat.data, output_data, seq_len * num_classes * sizeof(float));
+          
+          all_outputs.push_back(output_mat);
+          
+          std::cout << "[DEBUG] NPU recognition output " << img_idx 
+                    << ": batch_size=" << output_shape[0] << ", shape[" << seq_len << "x" << num_classes << "]"
+                    << ", output_mat created successfully" << std::endl;
+        } else {
+          return Status::InternalError("Unsupported NPU recognition output shape");
+        }
+      }
+      
+      return all_outputs;
+    }
+    
+    // Standard preprocessing for CPU/GPU or NPU detection
+    std::vector<cv::Mat> processed_mats = input_mats;
+    last_npu_ratios_.clear();
+    
+    std::cout << "[DEBUG] Apply called with " << input_mats.size() << " input images" << std::endl;
+    std::cout << "[DEBUG] Device type: " << option_.DeviceType() 
+              << ", is_recognizer: " << is_recognizer_ << ", is_detector: " << is_detector_ << std::endl;
+    
+    if (!input_mats.empty()) {
+      const cv::Mat& first_input = input_mats[0];
+      std::cout << "[DEBUG] First input image: dims=" << first_input.dims 
+                << ", rows=" << first_input.rows << ", cols=" << first_input.cols 
+                << ", channels=" << first_input.channels() << ", type=" << first_input.type() 
+                << ", empty=" << first_input.empty() << std::endl;
+    }
+    
+    if (option_.DeviceType() == "npu" && is_detector_) {
+      // For NPU detection, check if input is already preprocessed (4D tensor)
+      const cv::Mat& first_input = input_mats[0];
+      
+      if (first_input.dims == 4) {
+        // Input is already preprocessed as 4D tensor, no need for NPU scale/pad
+        std::cout << "[DEBUG] NPU detection: Input already preprocessed as 4D tensor, skipping NPU scale/pad" << std::endl;
+        processed_mats = input_mats; // Use input as-is
+        // For 4D tensors, we don't apply NPU preprocessing, but we still need to initialize ratios
+        for (size_t i = 0; i < input_mats.size(); ++i) {
+          last_npu_ratios_.push_back({1.0f, 1.0f}); // No scaling applied
+        }
+      } else if (first_input.dims == 2 && first_input.rows > 0 && first_input.cols > 0) {
+        // Input is 2D image, apply NPU preprocessing
+        std::cout << "[DEBUG] NPU detection: Input is 2D image, applying NPU scale/pad" << std::endl;
+        
+        auto input_port = model_->input(0);
+        auto shape = input_port.get_shape();
+        int target_h = 0, target_w = 0;
+        
+        if (shape.size() == 4) {
+          target_h = static_cast<int>(shape[2]);
+          target_w = static_cast<int>(shape[3]);
+        } else if (shape.size() == 3) {
+          target_h = static_cast<int>(shape[1]);
+          target_w = static_cast<int>(shape[2]);
+        } else if (shape.size() == 2) {
+          target_h = static_cast<int>(shape[0]);
+          target_w = static_cast<int>(shape[1]);
+        } else {
+          return Status::InvalidArgumentError("Unsupported model input shape for NPU detection");
+        }
+        
+        processed_mats.clear();
+        for (const auto &img : input_mats) {
+          auto result = NPUScaleAndPad(img, target_h, target_w);
+          if (!result.ok()) {
+            return result.status();
+          }
+          
+          cv::Mat padded_image;
+          float ratio_h, ratio_w;
+          std::tie(padded_image, ratio_h, ratio_w) = result.value();
+          
+          processed_mats.push_back(padded_image);
+          last_npu_ratios_.push_back({ratio_h, ratio_w});
+        }
+      } else {
+        std::cout << "[DEBUG] NPU detection: Unsupported input format, using as-is" << std::endl;
+        // Initialize ratios for unknown format
+        for (size_t i = 0; i < input_mats.size(); ++i) {
+          last_npu_ratios_.push_back({1.0f, 1.0f});
+        }
+      }
+    }
+    
+    // Analyze the input data format (use processed_mats after NPU preprocessing)
+    const cv::Mat& first_mat = processed_mats[0];
     
     // Check if the Mat contains valid data
     // For multi-dimensional Mat (dims >= 3), don't check rows/cols as they may be -1
@@ -327,7 +803,7 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
       }
       
       for (size_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
-        const cv::Mat& mat = input_mats[batch_idx];
+        const cv::Mat& mat = processed_mats[batch_idx];
         
         // Calculate elements per sample based on Mat dimensions
         size_t mat_elements;
