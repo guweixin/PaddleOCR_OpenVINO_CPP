@@ -85,79 +85,28 @@ TextRecPredictor::Process(std::vector<cv::Mat> &batch_data) {
     exit(-1);
   }
 
-  // For NPU recognition, skip ToBatch and process images one by one (batch size = 1)
-  StatusOr<std::vector<cv::Mat>> batch_infer;
-  if (infer_ptr_ && infer_ptr_->GetDeviceType() == "npu") {
-    std::cout << "[DEBUG] NPU recognition: Processing images one by one (batch size = 1)" << std::endl;
-    // NPU recognition: process each image individually with batch size = 1
-    std::vector<cv::Mat> all_infer_results;
-    
-    for (size_t i = 0; i < batch_resize_norm.value().size(); ++i) {
-      std::vector<cv::Mat> single_image = {batch_resize_norm.value()[i]};
-      std::cout << "[DEBUG] NPU recognition: Processing image " << i << " individually" << std::endl;
-      
-      auto single_infer = infer_ptr_->Apply(single_image);
-      if (!single_infer.ok()) {
-        INFOE("NPU single image inference failed: %s", single_infer.status().ToString().c_str());
-        exit(-1);
-      }
-      
-      // Collect the results from single image inference
-      for (const auto& result : single_infer.value()) {
-        all_infer_results.push_back(result);
-      }
-    }
-    
-    batch_infer = StatusOr<std::vector<cv::Mat>>(all_infer_results);
-  } else {
-    // CPU/GPU: Use standard batching
-    auto batch_tobatch = pre_op_.at("ToBatch")->Apply(batch_resize_norm.value());
-    if (!batch_tobatch.ok()) {
-      INFOE(batch_tobatch.status().ToString().c_str());
-      exit(-1);
-    }
-    batch_infer = infer_ptr_->Apply(batch_tobatch.value());
+  // Standard preprocessing pipeline for all devices (CPU, GPU, NPU)
+  auto batch_tobatch = pre_op_.at("ToBatch")->Apply(batch_resize_norm.value());
+  if (!batch_tobatch.ok()) {
+    INFOE(batch_tobatch.status().ToString().c_str());
+    exit(-1);
   }
-  
+
+  // Standard inference for all devices
+  auto batch_infer = infer_ptr_->Apply(batch_tobatch.value());
   if (!batch_infer.ok()) {
     INFOE(batch_infer.status().ToString().c_str());
     exit(-1);
   }
 
-  // For NPU recognition, we have multiple single results, need to process each one
-  std::vector<std::pair<std::string, float>> all_ctc_results;
-  
-  if (infer_ptr_ && infer_ptr_->GetDeviceType() == "npu") {
-    std::cout << "[DEBUG] NPU recognition: Processing " << batch_infer.value().size() << " individual CTC results" << std::endl;
-    
-    // For NPU, each element in batch_infer.value() is a single image result
-    for (size_t i = 0; i < batch_infer.value().size(); ++i) {
-      auto ctc_result = post_op_.at("CTCLabelDecode")->Apply(batch_infer.value()[i]);
-      if (!ctc_result.ok()) {
-        INFOE("NPU CTC decode failed for image %zu: %s", i, ctc_result.status().ToString().c_str());
-        exit(-1);
-      }
-      
-      // Each CTC result should contain only one decoded result for a single image
-      if (!ctc_result.value().empty()) {
-        all_ctc_results.push_back(ctc_result.value()[0]);
-        std::cout << "[DEBUG] NPU CTC result " << i << ": \"" << ctc_result.value()[0].first 
-                  << "\" (score: " << ctc_result.value()[0].second << ")" << std::endl;
-      } else {
-        // Empty result, add placeholder
-        all_ctc_results.push_back(std::make_pair("", 0.0f));
-        std::cout << "[WARNING] Empty CTC result for NPU image " << i << std::endl;
-      }
-    }
-  } else {
-    // CPU/GPU: Process single batch result
-    auto ctc_result = post_op_.at("CTCLabelDecode")->Apply(batch_infer.value()[0]);
-    if (!ctc_result.ok()) {
-      INFOE(ctc_result.status().ToString().c_str());
-      exit(-1);
-    }
-    all_ctc_results = ctc_result.value();
+  // Standard post-processing for all devices
+  auto ctc_result = post_op_.at("CTCLabelDecode")->Apply(batch_infer.value()[0]);
+  if (!ctc_result.ok()) {
+    INFOE(ctc_result.status().ToString().c_str());
+    exit(-1);
   }
+  
+  std::vector<std::pair<std::string, float>> all_ctc_results = ctc_result.value();
 
   std::vector<std::unique_ptr<BaseCVResult>> base_cv_result_ptr_vec = {};
   for (int i = 0; i < all_ctc_results.size(); i++, input_index_++) {

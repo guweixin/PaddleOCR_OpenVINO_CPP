@@ -204,6 +204,9 @@ bool parse_args(int argc, char *argv[])
             print_help();
             return false;
         }
+
+        // if (device== "npu")
+        //     text_recognition_batch_size = 1;
     }
     return true;
 }

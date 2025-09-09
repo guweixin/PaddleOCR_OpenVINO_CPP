@@ -34,6 +34,7 @@ Status TextDetPredictor::Build() {
   // Register<ReadImage>("Read", pre_tfs.at("DecodeImage.img_mode"));
   Register<ReadImage>("Read");
   DetResizeForTestParam resize_param;
+  // resize_param.device = params_.device;
   resize_param.input_shape = params_.input_shape;
   resize_param.max_side_limit = params_.max_side_limit;
   resize_param.limit_side_len = params_.limit_side_len;

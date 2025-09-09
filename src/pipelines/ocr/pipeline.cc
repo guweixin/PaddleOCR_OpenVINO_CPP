@@ -16,6 +16,7 @@
 
 #include "result.h"
 #include "src/utils/args.h"
+#include <opencv2/highgui.hpp>
 _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
     : BasePipeline(), params_(params) {
   
@@ -217,6 +218,21 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
     for (auto &image : batches.value()[i]) {
       images_for_processing.push_back(image.clone());
     }
+
+    // Guard: if any image in this batch is empty, skip this batch
+    bool has_empty_image = false;
+    for (const auto &mat : images_for_processing) {
+      if (mat.empty()) {
+        has_empty_image = true;
+        break;
+      }
+    }
+    if (has_empty_image) {
+      INFOE("pipeline get sample fail : Input image at batch %d contains empty image, skipping batch.", i);
+      // keep input_path/index alignment by advancing index by the batch size
+      index += static_cast<int>(batches.value()[i].size());
+      continue;
+    }
     std::vector<cv::Mat> images_for_det_copy = {};
     for (auto &item : images_for_processing) {
       images_for_det_copy.push_back(item.clone());
@@ -252,6 +268,7 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
       results[k].text_rec_score_thresh = text_rec_score_thresh_;
     }
     if (!indices.empty()) {
+      std::cout << "--------------------------------" << std::endl;
       std::vector<cv::Mat> all_subs_of_imgs = {};
       std::vector<cv::Mat> all_subs_of_imgs_copy = {};
       std::vector<int> chunk_indices(1, 0);
@@ -301,9 +318,90 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
               return a.second < b.second;
             });
         std::vector<cv::Mat> sorted_subs_of_img = {};
+        
+        // npu image padding
         for (auto &item : sorted_subs_info) {
-          sorted_subs_of_img.push_back(all_subs_of_img[item.first]);
+          cv::Mat final_img;
+          if (device =="npu"){
+            std::cout << "----------here----------------------" << std::endl;
+            cv::Mat tempimg = all_subs_of_img[item.first];
+            
+            int src_h = tempimg.rows;
+            int src_w = tempimg.cols;
+            float aspect_ratio = static_cast<float>(src_w) / static_cast<float>(src_h);       
+            // Model specifications and thresholds
+            const int target_h = 48;  // Standard OCR recognition height
+            const int small_width = 480;   // Small model width
+            const int medium_width = 800;  // Medium model width
+            const int large_width = 1280;  // Large model width
+            
+            // Calculate thresholds: model_width / target_h
+            float small_threshold = static_cast<float>(small_width) / static_cast<float>(target_h);    // 480/48 = 10.0
+            float medium_threshold = static_cast<float>(medium_width) / static_cast<float>(target_h);  // 800/48 = 16.67
+            
+            int target_w = 0;        
+            if (aspect_ratio <= small_threshold) {
+              // selected_model_type = NPURecModelSize::SMALL;  // model_type = 0
+              target_w = small_width;
+            } else if (aspect_ratio <= medium_threshold) {
+              // selected_model_type = NPURecModelSize::MEDIUM; // model_type = 1
+              target_w = medium_width;
+            } else {
+              // selected_model_type = NPURecModelSize::LARGE;  // model_type = 2
+              target_w = large_width;
+            }
+
+            std::cout << "[DEBUG] NPU image " <<  ": src(" << src_w << "x" << src_h 
+                  << "), aspect_ratio=" << aspect_ratio 
+                  << ", thresholds(small=" << small_threshold << ", medium=" << medium_threshold << ")"
+                  // << ", selected_model=" << static_cast<int>(selected_model_type) 
+                  << ", target_size(" << target_w << "x" << target_h << ")" << std::endl;
+            
+            float resize_ratio = std::min(target_h/src_h, target_w/src_w);
+            int new_h = static_cast<int>(std::round(src_h * resize_ratio));
+            int new_w = static_cast<int>(std::round(src_w * resize_ratio));
+            if (new_h > target_h) new_h = target_h;
+            if (new_w > target_w) new_w = target_w;
+            cv::Mat resized;
+            cv::resize(tempimg, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
+            
+            std::cout << "src h: " << std::to_string(src_h)<<", w: "<< std::to_string(src_w)<<std::endl;
+            std::cout << "new h: " << std::to_string(new_h)<<", w: "<< std::to_string(new_w)<<std::endl;
+            std::cout << "resize_ratio: " << std::to_string(resize_ratio)<<std::endl;
+            
+            cv::Mat final_img = cv::Mat::zeros(target_h, target_w, tempimg.type());
+              int offset_y = 0;
+              int offset_x = 0;
+              cv::Rect roi(offset_x, offset_y, new_w, new_h);
+              resized.copyTo(final_img(roi));
+
+          }else{
+            final_img = all_subs_of_img[item.first];
+          }
+          sorted_subs_of_img.push_back(final_img);
         }
+        // for (auto &item : sorted_subs_info){
+        //   sorted_subs_of_img.push_back(all_subs_of_img[item.first]);
+        // }
+        // Debug: display sorted_subs_of_img for inspection (window sized to image)
+        try {
+          for (int si = 0; si < static_cast<int>(sorted_subs_of_img.size()); ++si) {
+            const cv::Mat &dbg_img = sorted_subs_of_img[si];
+            if (!dbg_img.empty()) {
+              std::string win = "sorted_sub_" + std::to_string(si);
+              cv::namedWindow(win, cv::WINDOW_NORMAL);
+              // set window size to match image size
+              cv::resizeWindow(win, dbg_img.cols, dbg_img.rows);
+              cv::imshow(win, dbg_img);
+            }
+          }
+          // small wait to allow windows to refresh; 1 ms keeps it non-blocking
+          cv::waitKey(1);
+        } catch (const std::exception &e) {
+          INFOE("GUI display failed: %s", e.what());
+        }
+
+
         text_rec_model_->Predict(sorted_subs_of_img);
         auto text_rec_model_results =
             static_cast<TextRecPredictor *>(text_rec_model_.get())

@@ -15,8 +15,10 @@
 #include "processors.h"
 
 #include <stdexcept>
+#include <cstdlib>
 
 #include "src/utils/utility.h"
+#include "src/utils/args.h"
 
 DetResizeForTest::DetResizeForTest(const DetResizeForTestParam &params) {
   if (params.input_shape.has_value()) {
@@ -34,12 +36,17 @@ DetResizeForTest::DetResizeForTest(const DetResizeForTestParam &params) {
   } else if (params.resize_long.has_value()) {
     resize_type_ = 2;
     resize_long_ = params.resize_long.value_or(960);
-  } else {
+  }
+  else{
     limit_side_len_ = 736;
     limit_type_ = "min";
   }
   if (params.max_side_limit.has_value()) {
     max_side_limit_ = params.max_side_limit.value();
+  }
+  // If running on NPU, prefer resize type 4 (NPU-friendly scale+pad)
+  if (device == "npu"){
+    resize_type_ = 4;
   }
 }
 
@@ -99,6 +106,8 @@ StatusOr<cv::Mat> DetResizeForTest::Resize(const cv::Mat &img,
     return ResizeImageType2(img);
   case 3:
     return ResizeImageType3(img);
+  case 4:
+    return ResizeImageType4(img, limit_side_len, limit_type, max_side_limit);
   default:
     return Status::InvalidArgumentError("Unknown resize_type: " +
                                       std::to_string(resize_type_));
@@ -119,6 +128,8 @@ StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
                                    const std::string &limit_type,
                                    int max_side_limit) const {
+  
+  std::cout<<"---------ResizeImageType0--------"   << std::endl;
   int h = img.rows, w = img.cols;
   float ratio = 1.f;
   if (limit_type == "max") {
@@ -155,6 +166,7 @@ DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
 
 StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType1(const cv::Mat &img) const {
+  std::cout<<"---------ResizeImageType1--------"   << std::endl;
   int resize_h = image_shape_[0];
   int resize_w = image_shape_[1];
   int ori_h = img.rows, ori_w = img.cols;
@@ -172,6 +184,7 @@ DetResizeForTest::ResizeImageType1(const cv::Mat &img) const {
 
 StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType2(const cv::Mat &img) const {
+  std::cout<<"---------ResizeImageType2--------"   << std::endl;
   int h = img.rows, w = img.cols;
   int resize_h = h, resize_w = w;
   float ratio;
@@ -196,6 +209,7 @@ DetResizeForTest::ResizeImageType2(const cv::Mat &img) const {
 
 StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType3(const cv::Mat &img) const {
+  std::cout<<"---------ResizeImageType3--------"   << std::endl;
   if (input_shape_.size() != INPUTSHAPE)
     return Status::InvalidArgumentError("input_shape not set for type " +
                                       std::to_string(INPUTSHAPE));
@@ -207,6 +221,48 @@ DetResizeForTest::ResizeImageType3(const cv::Mat &img) const {
   cv::Mat resized;
   cv::resize(img, resized, cv::Size(resize_w, resize_h));
   return resized;
+}
+
+// for NPU 
+StatusOr<cv::Mat>
+DetResizeForTest::ResizeImageType4(const cv::Mat &img, int limit_side_len,
+                                   const std::string &limit_type,
+                                   int max_side_limit) const {
+  std::cout<<"---------ResizeImageType4--------"   << std::endl;
+  if (img.empty()) {
+    return Status::InvalidArgumentError("Input image is empty for ResizeImageType4");
+  }
+   
+  // Determine target size from limit_side_len / limit_type similar to Type0
+  int target_h = 960;
+  int target_w = 960;
+  int h = img.rows;
+  int w = img.cols;
+  float scale;
+  cv::Mat resized;
+  if (h <= target_h && w <= target_w){
+    scale = 1.0;
+  } else {
+    float scale_h = static_cast<float>(target_h) / static_cast<float>(h);
+    float scale_w = static_cast<float>(target_w) / static_cast<float>(w);
+    scale = std::min(scale_h, scale_w);
+  }
+
+  // Else scale down proportionally so long side == target long side, then paste
+  int new_h = static_cast<int>(std::round(h * scale));
+  int new_w = static_cast<int>(std::round(w * scale));
+  if (new_h <= 0) new_h = 1;
+  if (new_w <= 0) new_w = 1;  
+  cv::resize(img, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
+
+  cv::Mat canvas = cv::Mat::ones(target_h, target_w, img.type());
+  if (canvas.depth() == CV_8U) canvas.setTo(cv::Scalar::all(255));
+  else canvas.setTo(cv::Scalar::all(1.0));
+
+  int offset_y = 0;
+  int offset_x = 0;
+  resized.copyTo(canvas(cv::Rect(offset_x, offset_y, new_w, new_h)));
+  return canvas;
 }
 
 DBPostProcess::DBPostProcess(const DBPostProcessParams &params)
@@ -332,9 +388,25 @@ DBPostProcess::PolygonsFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
                                   float box_thresh, float unclip_ratio) {
   std::vector<std::vector<cv::Point2f>> boxes;
   std::vector<float> scores;
-
-  float width_scale = static_cast<float>(dest_width) / bitmap.cols;
-  float height_scale = static_cast<float>(dest_height) / bitmap.rows;
+  
+  float width_scale;
+  float height_scale;
+  // If running on NPU, the bitmap already corresponds to original scale/padded
+  // so we keep scales as 1 to avoid double-scaling.
+  if (device == "npu") {
+      if (dest_width <= bitmap.cols && dest_height <= bitmap.rows){
+        width_scale = 1.0f;
+        height_scale = 1.0f;
+      } else {
+        float scale_h = static_cast<float>(bitmap.rows) / static_cast<float>(dest_height);
+        float scale_w = static_cast<float>(bitmap.cols) / static_cast<float>(dest_width);
+        width_scale = std::min(scale_h, scale_w);
+        height_scale = width_scale;
+      }
+  } else {
+    width_scale = static_cast<float>(dest_width) / bitmap.cols;
+    height_scale = static_cast<float>(dest_height) / bitmap.rows;
+  }
 
   cv::Mat bitmap_uint8;
   bitmap.convertTo(bitmap_uint8, CV_8UC1, 255.0);
@@ -408,10 +480,22 @@ DBPostProcess::BoxesFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
                                float box_thresh, float unclip_ratio) {
   std::vector<std::vector<cv::Point2f>> boxes;
   std::vector<float> scores;
-
-  float width_scale = static_cast<float>(dest_width) / bitmap.cols;
-  float height_scale = static_cast<float>(dest_height) / bitmap.rows;
-
+  float width_scale;
+  float height_scale;
+  if (device== "npu"){
+    if (dest_height <= bitmap.rows && dest_width <= bitmap.cols){
+      width_scale = 1.0;
+      height_scale = 1.0;
+    }else{
+      float scale_h = static_cast<float>(bitmap.rows) / static_cast<float>(dest_height);
+      float scale_w = static_cast<float>(bitmap.cols) / static_cast<float>(dest_width);
+      width_scale = std::min(scale_h, scale_w);
+      height_scale = std::min(scale_h, scale_w);
+    }
+  }else{
+    width_scale = static_cast<float>(dest_width) / bitmap.cols;
+    height_scale = static_cast<float>(dest_height) / bitmap.rows;
+  }
   cv::Mat bitmap_uint8;
   bitmap.convertTo(bitmap_uint8, CV_8UC1, 255.0);
 

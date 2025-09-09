@@ -65,6 +65,10 @@ private:
   StatusOr<cv::Mat> ResizeImageType1(const cv::Mat &img) const;
   StatusOr<cv::Mat> ResizeImageType2(const cv::Mat &img) const;
   StatusOr<cv::Mat> ResizeImageType3(const cv::Mat &img) const;
+  StatusOr<cv::Mat> ResizeImageType4(const cv::Mat &img,
+                                     int limit_side_len,
+                                     const std::string &limit_type,
+                                     int max_side_limit) const;
   static constexpr int INPUTSHAPE = 3;
 };
 

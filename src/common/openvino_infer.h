@@ -66,9 +66,6 @@ private:
   // NPU detection model (single model)
   ov::CompiledModel npu_detection_compiled_model_;
   ov::InferRequest npu_detection_infer_request_;
-  
-  // Preprocessing: scale and pad image to target size, return processed image and mapping ratios
-  StatusOr<std::tuple<cv::Mat, float, float>> ScaleAndPad(const cv::Mat &image, int target_h, int target_w) const;
 
   Status Create();
   Status CheckRunMode();
