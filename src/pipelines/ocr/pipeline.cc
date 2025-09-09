@@ -357,7 +357,8 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
                   // << ", selected_model=" << static_cast<int>(selected_model_type) 
                   << ", target_size(" << target_w << "x" << target_h << ")" << std::endl;
             
-            float resize_ratio = std::min(target_h/src_h, target_w/src_w);
+            float resize_ratio = std::min( static_cast<float>(target_h) / static_cast<float>(src_h), 
+                                           static_cast<float>(target_w) / static_cast<float>(src_w));
             int new_h = static_cast<int>(std::round(src_h * resize_ratio));
             int new_w = static_cast<int>(std::round(src_w * resize_ratio));
             if (new_h > target_h) new_h = target_h;
@@ -369,39 +370,36 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
             std::cout << "new h: " << std::to_string(new_h)<<", w: "<< std::to_string(new_w)<<std::endl;
             std::cout << "resize_ratio: " << std::to_string(resize_ratio)<<std::endl;
             
-            cv::Mat final_img = cv::Mat::zeros(target_h, target_w, tempimg.type());
+            // final_img = cv::Mat::zeros(target_h, target_w, tempimg.type());
+            final_img = cv::Mat(target_h, target_w, tempimg.type(), cv::Scalar::all(255));
               int offset_y = 0;
               int offset_x = 0;
               cv::Rect roi(offset_x, offset_y, new_w, new_h);
               resized.copyTo(final_img(roi));
-
+            
           }else{
             final_img = all_subs_of_img[item.first];
           }
           sorted_subs_of_img.push_back(final_img);
         }
+        std::cout << "----------done--------------------" << std::endl;
         // for (auto &item : sorted_subs_info){
         //   sorted_subs_of_img.push_back(all_subs_of_img[item.first]);
         // }
-        // Debug: display sorted_subs_of_img for inspection (window sized to image)
-        try {
-          for (int si = 0; si < static_cast<int>(sorted_subs_of_img.size()); ++si) {
-            const cv::Mat &dbg_img = sorted_subs_of_img[si];
-            if (!dbg_img.empty()) {
-              std::string win = "sorted_sub_" + std::to_string(si);
-              cv::namedWindow(win, cv::WINDOW_NORMAL);
-              // set window size to match image size
-              cv::resizeWindow(win, dbg_img.cols, dbg_img.rows);
-              cv::imshow(win, dbg_img);
-            }
-          }
-          // small wait to allow windows to refresh; 1 ms keeps it non-blocking
-          cv::waitKey(1);
-        } catch (const std::exception &e) {
-          INFOE("GUI display failed: %s", e.what());
-        }
-
-
+        // // Debug: display sorted_subs_of_img for inspection (window sized to image)
+        // for (int si = 0; si < static_cast<int>(sorted_subs_of_img.size()); ++si) {
+        //     const cv::Mat &dbg_img = sorted_subs_of_img[si];
+        //     if (!dbg_img.empty()) {
+        //       std::string win = "sorted_sub_" + std::to_string(si);
+        //       cv::namedWindow(win, cv::WINDOW_NORMAL);
+        //       // set window size to match image size
+        //       cv::resizeWindow(win, dbg_img.cols, dbg_img.rows);
+        //       cv::imshow(win, dbg_img);
+        //     }else{
+        //       std::cout << "----------empty img--------------------" << std::endl;
+        //     }
+        //   }
+        //   cv::waitKey(0);
         text_rec_model_->Predict(sorted_subs_of_img);
         auto text_rec_model_results =
             static_cast<TextRecPredictor *>(text_rec_model_.get())

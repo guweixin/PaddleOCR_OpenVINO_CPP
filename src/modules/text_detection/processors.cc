@@ -391,19 +391,17 @@ DBPostProcess::PolygonsFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
   
   float width_scale;
   float height_scale;
-  // If running on NPU, the bitmap already corresponds to original scale/padded
-  // so we keep scales as 1 to avoid double-scaling.
-  if (device == "npu") {
-      if (dest_width <= bitmap.cols && dest_height <= bitmap.rows){
-        width_scale = 1.0f;
-        height_scale = 1.0f;
-      } else {
-        float scale_h = static_cast<float>(bitmap.rows) / static_cast<float>(dest_height);
-        float scale_w = static_cast<float>(bitmap.cols) / static_cast<float>(dest_width);
-        width_scale = std::min(scale_h, scale_w);
-        height_scale = width_scale;
-      }
-  } else {
+  if (device== "npu"){
+    if (dest_height <= bitmap.rows && dest_width <= bitmap.cols){
+      width_scale = 1.0;
+      height_scale = 1.0;
+    }else{
+      float scale_h = static_cast<float>(dest_height) / static_cast<float>(bitmap.rows);
+      float scale_w = static_cast<float>(dest_width) / static_cast<float>(bitmap.cols);
+      width_scale = std::max(scale_h, scale_w);
+      height_scale = std::max(scale_h, scale_w);
+    }
+  }else{
     width_scale = static_cast<float>(dest_width) / bitmap.cols;
     height_scale = static_cast<float>(dest_height) / bitmap.rows;
   }
@@ -487,10 +485,10 @@ DBPostProcess::BoxesFromBitmap(const cv::Mat &pred, const cv::Mat &bitmap,
       width_scale = 1.0;
       height_scale = 1.0;
     }else{
-      float scale_h = static_cast<float>(bitmap.rows) / static_cast<float>(dest_height);
-      float scale_w = static_cast<float>(bitmap.cols) / static_cast<float>(dest_width);
-      width_scale = std::min(scale_h, scale_w);
-      height_scale = std::min(scale_h, scale_w);
+      float scale_h = static_cast<float>(dest_height) / static_cast<float>(bitmap.rows);
+      float scale_w = static_cast<float>(dest_width) / static_cast<float>(bitmap.cols);
+      width_scale = std::max(scale_h, scale_w);
+      height_scale = std::max(scale_h, scale_w);
     }
   }else{
     width_scale = static_cast<float>(dest_width) / bitmap.cols;

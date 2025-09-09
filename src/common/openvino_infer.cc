@@ -180,6 +180,8 @@ Status OpenVinoInfer::CheckRunMode() {
 
 StatusOr<std::vector<cv::Mat>>
 OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
+
+  std::cout << "--------------Apply------------------" << std::endl;
   if (input_mats.empty()) {
     return Status::InvalidArgumentError("Input matrices are empty");
   }
@@ -298,7 +300,38 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
     
     // Skip all reshape operations - use models as-is
     std::cout << "[DEBUG] Reshape operations disabled - using model as-is" << std::endl;
-    
+
+    // If running on NPU and this is a recognizer, choose the precompiled model
+    // that best matches the input width to avoid input tensor size mismatch.
+    if (option_.DeviceType() == "npu" && is_recognizer_) {
+      size_t in_w = 0;
+      if (input_shape.size() >= 4) {
+        in_w = input_shape[3];
+      } else if (first_mat.dims == 4) {
+        in_w = static_cast<size_t>(first_mat.size[3]);
+      } else if (first_mat.dims == 3) {
+        in_w = static_cast<size_t>(first_mat.size[2]);
+      } else {
+        in_w = static_cast<size_t>(first_mat.cols);
+      }
+
+      NPURecModelSize choose = NPURecModelSize::SMALL;
+      if (in_w <= 480) choose = NPURecModelSize::SMALL;
+      else if (in_w <= 800) choose = NPURecModelSize::MEDIUM;
+      else choose = NPURecModelSize::LARGE;
+
+      auto it_model = npu_compiled_models_.find(choose);
+      auto it_req = npu_infer_requests_.find(choose);
+      if (it_model != npu_compiled_models_.end() && it_req != npu_infer_requests_.end()) {
+        // Switch to the chosen compiled model and infer request
+        compiled_model_ = it_model->second;
+        infer_request_ = it_req->second;
+        std::cout << "[DEBUG] Switched to NPU recognizer compiled model for width=" << in_w << std::endl;
+      } else {
+        std::cout << "[WARNING] No compiled NPU model available for chosen size, using default compiled_model_." << std::endl;
+      }
+    }
+
     // For dynamic models, create tensor directly based on input data shape
     ov::Tensor input_tensor(ov::element::f32, input_shape);
     infer_request_.set_input_tensor(input_tensor);
