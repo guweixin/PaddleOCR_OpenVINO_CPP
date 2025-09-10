@@ -115,6 +115,33 @@ PaddleOCRParams GetPipelineParams() {
   return ocr_params;
 }
 
+
+void showProgress(size_t current, size_t total)
+{
+  const int bar_width = 50;
+  float progress = static_cast<float>(current) / total;
+  int pos = static_cast<int>(bar_width * progress);
+
+  std::cout << "\r[";
+  for (int i = 0; i < bar_width; ++i)
+  {
+    if (i < pos)
+      std::cout << "=";
+    else if (i == pos)
+      std::cout << ">";
+    else
+      std::cout << " ";
+  }
+  std::cout << "] " << std::fixed << std::setprecision(1) << (progress * 100.0) << "% "
+            << current << "/" << total;
+  std::cout.flush();
+
+  if (current == total)
+  {
+    std::cout << std::endl;
+  }
+}
+
 int main(int argc, char *argv[]) {
   parse_args(argc, argv);
   if (input.empty()) {
@@ -180,19 +207,25 @@ int main(int argc, char *argv[]) {
   }
   
   // 逐个处理每张图片并立即输出结果
-  for (const auto& image_path : image_paths) {
-    INFO("Processing image: %s", image_path.c_str());
+  size_t total_items = image_paths.size();
+  for (size_t i = 0; i < total_items; ++i)
+  {
+    // Show progress
+    showProgress(i + 1, total_items);
+    const auto& image_path = image_paths[i];
+  // for (const auto& image_path : image_paths) {
+    // INFO("Processing image: %s", image_path.c_str());
     
     auto outputs = ocr_pipeline.Predict(image_path);
     
-    for (auto &output : outputs) {
-      output->Print();
-      output->SaveToImg(save_path);
-      output->SaveToJson(save_path);
-      static_cast<OCRResult*>(output.get())->SaveToTxt(save_path);
-    }
+    // for (auto &output : outputs) {
+    //   output->Print();
+    //   output->SaveToImg(save_path);
+    //   output->SaveToJson(save_path);
+    //   static_cast<OCRResult*>(output.get())->SaveToTxt(save_path);
+    // }
     
-    INFO("Completed processing: %s", image_path.c_str());
+    // INFO("Completed processing: %s", image_path.c_str());
   }
   
   return 0;
