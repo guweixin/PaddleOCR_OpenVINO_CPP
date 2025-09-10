@@ -181,19 +181,9 @@ Status OpenVinoInfer::CheckRunMode() {
 StatusOr<std::vector<cv::Mat>>
 OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
 
-  std::cout << "--------------Apply------------------" << std::endl;
   if (input_mats.empty()) {
     return Status::InvalidArgumentError("Input matrices are empty");
   }
-  
-  std::cout << "" << input_mats.size() << " input images" << std::endl;
-  std::cout << "[DEBUG] Device type: " << option_.DeviceType() << ", is_recognizer: " << is_recognizer_ << ", is_detector: " << is_detector_ << std::endl;
-  
-  // // For NPU recognition, return empty result directly
-  // if (option_.DeviceType() == "npu" && is_recognizer_) {
-  //   std::cout << "[DEBUG] NPU recognition: Returning empty result directly" << std::endl;
-  //   return std::vector<cv::Mat>();
-  // }
   
   try {
     // Prepare input tensor
@@ -210,9 +200,8 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
     std::vector<cv::Mat> processed_mats = input_mats;
     last_npu_ratios_.clear();
     
-    std::cout << "[DEBUG] Apply called with " << input_mats.size() << " input images" << std::endl;
-    std::cout << "[DEBUG] Device type: " << option_.DeviceType() 
-              << ", is_recognizer: " << is_recognizer_ << ", is_detector: " << is_detector_ << std::endl;
+    // std::cout << "[DEBUG] Device type: " << option_.DeviceType() 
+    //           << ", is_recognizer: " << is_recognizer_ << ", is_detector: " << is_detector_ << std::endl;
           
     // Analyze the input data format (use processed_mats after NPU preprocessing)
     const cv::Mat& first_mat = processed_mats[0];
@@ -298,9 +287,6 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
       return Status::InvalidArgumentError("Unsupported input data format");
     }
     
-    // Skip all reshape operations - use models as-is
-    std::cout << "[DEBUG] Reshape operations disabled - using model as-is" << std::endl;
-
     // If running on NPU and this is a recognizer, choose the precompiled model
     // that best matches the input width to avoid input tensor size mismatch.
     if (option_.DeviceType() == "npu" && is_recognizer_) {
@@ -351,12 +337,12 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
     infer_request_.set_input_tensor(input_tensor);
     
     size_t tensor_size = input_tensor.get_size();
-    std::cout << "[DEBUG] Created tensor with shape: [";
-    for (size_t i = 0; i < input_shape.size(); ++i) {
-      std::cout << input_shape[i];
-      if (i < input_shape.size() - 1) std::cout << ",";
-    }
-    std::cout << "], size: " << tensor_size << std::endl;
+    // std::cout << "[DEBUG] Created tensor with shape: [";
+    // for (size_t i = 0; i < input_shape.size(); ++i) {
+    //   std::cout << input_shape[i];
+    //   if (i < input_shape.size() - 1) std::cout << ",";
+    // }
+    // std::cout << "], size: " << tensor_size << std::endl;
     
     // Copy input data
     float* input_data = input_tensor.data<float>();

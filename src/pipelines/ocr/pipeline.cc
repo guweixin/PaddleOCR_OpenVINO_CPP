@@ -268,7 +268,6 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
       results[k].text_rec_score_thresh = text_rec_score_thresh_;
     }
     if (!indices.empty()) {
-      std::cout << "--------------------------------" << std::endl;
       std::vector<cv::Mat> all_subs_of_imgs = {};
       std::vector<cv::Mat> all_subs_of_imgs_copy = {};
       std::vector<int> chunk_indices(1, 0);
@@ -398,24 +397,6 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
           }
           sorted_subs_of_img.push_back(final_img);
         }
-        std::cout << "----------done--------------------" << std::endl;
-        // for (auto &item : sorted_subs_info){
-        //   sorted_subs_of_img.push_back(all_subs_of_img[item.first]);
-        // }
-        // // Debug: display sorted_subs_of_img for inspection (window sized to image)
-        // for (int si = 0; si < static_cast<int>(sorted_subs_of_img.size()); ++si) {
-        //     const cv::Mat &dbg_img = sorted_subs_of_img[si];
-        //     if (!dbg_img.empty()) {
-        //       std::string win = "sorted_sub_" + std::to_string(si);
-        //       cv::namedWindow(win, cv::WINDOW_NORMAL);
-        //       // set window size to match image size
-        //       cv::resizeWindow(win, dbg_img.cols, dbg_img.rows);
-        //       cv::imshow(win, dbg_img);
-        //     }else{
-        //       std::cout << "----------empty img--------------------" << std::endl;
-        //     }
-        //   }
-        //   cv::waitKey(0);
         text_rec_model_->Predict(sorted_subs_of_img);
         auto text_rec_model_results =
             static_cast<TextRecPredictor *>(text_rec_model_.get())

@@ -129,7 +129,6 @@ DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
                                    const std::string &limit_type,
                                    int max_side_limit) const {
   
-  std::cout<<"---------ResizeImageType0--------"   << std::endl;
   int h = img.rows, w = img.cols;
   float ratio = 1.f;
   if (limit_type == "max") {
@@ -166,7 +165,6 @@ DetResizeForTest::ResizeImageType0(const cv::Mat &img, int limit_side_len,
 
 StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType1(const cv::Mat &img) const {
-  std::cout<<"---------ResizeImageType1--------"   << std::endl;
   int resize_h = image_shape_[0];
   int resize_w = image_shape_[1];
   int ori_h = img.rows, ori_w = img.cols;
@@ -184,7 +182,6 @@ DetResizeForTest::ResizeImageType1(const cv::Mat &img) const {
 
 StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType2(const cv::Mat &img) const {
-  std::cout<<"---------ResizeImageType2--------"   << std::endl;
   int h = img.rows, w = img.cols;
   int resize_h = h, resize_w = w;
   float ratio;
@@ -209,7 +206,6 @@ DetResizeForTest::ResizeImageType2(const cv::Mat &img) const {
 
 StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType3(const cv::Mat &img) const {
-  std::cout<<"---------ResizeImageType3--------"   << std::endl;
   if (input_shape_.size() != INPUTSHAPE)
     return Status::InvalidArgumentError("input_shape not set for type " +
                                       std::to_string(INPUTSHAPE));
@@ -228,7 +224,6 @@ StatusOr<cv::Mat>
 DetResizeForTest::ResizeImageType4(const cv::Mat &img, int limit_side_len,
                                    const std::string &limit_type,
                                    int max_side_limit) const {
-  std::cout<<"---------ResizeImageType4--------"   << std::endl;
   if (img.empty()) {
     return Status::InvalidArgumentError("Input image is empty for ResizeImageType4");
   }
