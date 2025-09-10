@@ -50,9 +50,9 @@ Status OpenVinoInfer::Create() {
     else{device = "CPU";}
     
     // Configure compilation options
-    ov::AnyMap config;
+    ov::AnyMap config = {{"PERFORMANCE_HINT", "LATENCY"}};
     if (device == "CPU") {
-      config["NUM_STREAMS"] = std::to_string(option_.CpuThreads());
+      config["CPU_RUNTIME_CACHE_CAPACITY"] = "0";
     } else{
       config["INFERENCE_PRECISION_HINT"] = "f16";
       config["CACHE_DIR"] = "./openvino_cache";
