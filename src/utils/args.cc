@@ -20,9 +20,9 @@
 // common args
 std::string input = "";
 std::string save_path = "./output/";
-std::string text_detection_model_name = "PP-OCRv5_server_det";
+std::string text_detection_model_name = "PP-OCRv4_mobile_det";
 std::string text_detection_model_dir = "";
-std::string text_recognition_model_name = "PP-OCRv5_server_rec";
+std::string text_recognition_model_name = "PP-OCRv4_mobile_rec";
 std::string text_recognition_model_dir = "";
 std::string text_recognition_batch_size = "6";
 
@@ -58,9 +58,9 @@ void print_help()
               << "Common args:\n"
               << "  --input <path>                     Data to be predicted, required. Local path of an image file\n"
               << "  --save_path <path>                 Path to save inference result files (default: ./output/)\n"
-              << "  --text_detection_model_name <name> Name of the text detection model (default: PP-OCRv5_server_det)\n"
+              << "  --text_detection_model_name <name> Name of the text detection model (default: PP-OCRv4_mobile_det)\n"
               << "  --text_detection_model_dir <path>  Path to the text detection model directory\n"
-              << "  --text_recognition_model_name <name> Name of the text recognition model (default: PP-OCRv5_server_rec)\n"
+              << "  --text_recognition_model_name <name> Name of the text recognition model (default: PP-OCRv4_mobile_rec)\n"
               << "  --text_recognition_model_dir <path> Path to the text recognition model directory\n"
               << "  --text_recognition_batch_size <num> Batch size for the text recognition model (default: 6)\n"
               << "\n"

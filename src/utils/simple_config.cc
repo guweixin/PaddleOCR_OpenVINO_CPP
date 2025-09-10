@@ -141,7 +141,7 @@ void SimpleConfig::Init() {
   
   // TextDetection defaults
   if (data_.find("SubModules.TextDetection.model_name") == data_.end()) {
-    data_["SubModules.TextDetection.model_name"] = "PP-OCRv5_server_det";
+    data_["SubModules.TextDetection.model_name"] = "PP-OCRv4_mobile_det";
   }
   if (data_.find("SubModules.TextDetection.limit_side_len") == data_.end()) {
     data_["SubModules.TextDetection.limit_side_len"] = "64";
@@ -167,7 +167,7 @@ void SimpleConfig::Init() {
   
   // TextRecognition defaults
   if (data_.find("SubModules.TextRecognition.model_name") == data_.end()) {
-    data_["SubModules.TextRecognition.model_name"] = "PP-OCRv5_server_rec";
+    data_["SubModules.TextRecognition.model_name"] = "PP-OCRv4_mobile_rec";
   }
   if (data_.find("SubModules.TextRecognition.batch_size") == data_.end()) {
     data_["SubModules.TextRecognition.batch_size"] = "6";

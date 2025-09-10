@@ -326,7 +326,6 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
         // Switch to the chosen compiled model and infer request
         compiled_model_ = it_model->second;
         infer_request_ = it_req->second;
-        std::cout << "[DEBUG] Switched to NPU recognizer compiled model for width=" << in_w << std::endl;
       } else {
         std::cout << "[WARNING] No compiled NPU model available for chosen size, using default compiled_model_." << std::endl;
       }

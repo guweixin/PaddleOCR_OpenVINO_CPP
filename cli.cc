@@ -164,8 +164,12 @@ int main(int argc, char *argv[]) {
   }
   
   auto params = GetPipelineParams();
+  auto start_time = std::chrono::high_resolution_clock::now();
   auto ocr_pipeline = PaddleOCR(params);
-  
+  auto end_time = std::chrono::high_resolution_clock::now();
+  double init_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+  std::cout << "models init time: " << (init_time) << " ms" << std::endl;
+
   // 检查输入是文件还是目录
   std::vector<std::string> image_paths;
   struct stat st;
@@ -208,25 +212,28 @@ int main(int argc, char *argv[]) {
   
   // 逐个处理每张图片并立即输出结果
   size_t total_items = image_paths.size();
+  auto start_infer_time = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < total_items; ++i)
   {
+    // INFO("Processing image: %s", image_path.c_str());
     // Show progress
     showProgress(i + 1, total_items);
     const auto& image_path = image_paths[i];
-  // for (const auto& image_path : image_paths) {
-    // INFO("Processing image: %s", image_path.c_str());
-    
     auto outputs = ocr_pipeline.Predict(image_path);
     
+    // show & save results
     // for (auto &output : outputs) {
     //   output->Print();
     //   output->SaveToImg(save_path);
     //   output->SaveToJson(save_path);
     //   static_cast<OCRResult*>(output.get())->SaveToTxt(save_path);
     // }
-    
     // INFO("Completed processing: %s", image_path.c_str());
   }
+  auto end_infer_time = std::chrono::high_resolution_clock::now();
+  double inference_time = std::chrono::duration<double, std::milli>(end_infer_time - start_infer_time).count();
+  std::cout << "models init time: " << (inference_time/ total_items) << " ms" << std::endl;
+
   
   return 0;
 }

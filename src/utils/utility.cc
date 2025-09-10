@@ -495,12 +495,12 @@ Utility::GetOcrModelInfo(std::string lang, std::string ppocr_version) {
 
   // Model and font selection logic
   if (ppocr_version == "PP-OCRv5") {
-    det_model_name = "PP-OCRv5_server_det";
+    det_model_name = "PP-OCRv4_mobile_det";
     std::string rec_lang;
 
     if (lang == "ch" || lang == "chinese_cht" || lang == "en" ||
         lang == "japan") {
-      rec_model_name = "PP-OCRv5_server_rec";
+      rec_model_name = "PP-OCRv4_mobile_rec";
       font_name = SIMFANG_FONT;
     } else if (LATIN_LANGS.count(lang)) {
       rec_lang = "latin";

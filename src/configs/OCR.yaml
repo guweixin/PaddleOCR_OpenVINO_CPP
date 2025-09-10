@@ -6,7 +6,7 @@ text_type: general
 SubModules:
   TextDetection:
     module_name: text_detection
-    model_name: PP-OCRv5_server_det
+    model_name: PP-OCRv4_mobile_det
     model_dir: null
     limit_side_len: 64
     limit_type: min
@@ -16,7 +16,7 @@ SubModules:
     unclip_ratio: 1.5
   TextRecognition:
     module_name: text_recognition
-    model_name: PP-OCRv5_server_rec 
+    model_name: PP-OCRv4_mobile_rec 
     model_dir: null
     batch_size: 6
     score_thresh: 0.0

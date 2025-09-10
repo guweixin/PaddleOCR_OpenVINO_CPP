@@ -322,7 +322,6 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
         for (auto &item : sorted_subs_info) {
           cv::Mat final_img;
           if (device =="npu"){
-            std::cout << "----------here----------------------" << std::endl;
             cv::Mat tempimg = all_subs_of_img[item.first];
             
             int src_h = tempimg.rows;
@@ -342,9 +341,6 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
                 small_width = npu_sizes[0].second;
                 medium_width = npu_sizes[1].second;
                 large_width = npu_sizes[2].second;
-                 std::cout << "[INFO] Using NPU model sizes: " << target_h << "x" << small_width 
-                           << ", " << target_h << "x" << medium_width 
-                           << ", " << target_h << "x" << large_width << std::endl;
                 } else {
                   std::cout << "[WARN] NPU model sizes not available, using defaults" << std::endl;
                 }
@@ -366,11 +362,11 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
               target_w = large_width;
             }
 
-            std::cout << "[DEBUG] NPU image " <<  ": src(" << src_w << "x" << src_h 
-                  << "), aspect_ratio=" << aspect_ratio 
-                  << ", thresholds(small=" << small_threshold << ", medium=" << medium_threshold << ")"
-                  // << ", selected_model=" << static_cast<int>(selected_model_type) 
-                  << ", target_size(" << target_w << "x" << target_h << ")" << std::endl;
+            // std::cout << "[DEBUG] NPU image " <<  ": src(" << src_w << "x" << src_h 
+            //       << "), aspect_ratio=" << aspect_ratio 
+            //       << ", thresholds(small=" << small_threshold << ", medium=" << medium_threshold << ")"
+            //       // << ", selected_model=" << static_cast<int>(selected_model_type) 
+            //       << ", target_size(" << target_w << "x" << target_h << ")" << std::endl;
             
             float resize_ratio = std::min( static_cast<float>(target_h) / static_cast<float>(src_h), 
                                            static_cast<float>(target_w) / static_cast<float>(src_w));
@@ -380,10 +376,6 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
             if (new_w > target_w) new_w = target_w;
             cv::Mat resized;
             cv::resize(tempimg, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
-            
-            std::cout << "src h: " << std::to_string(src_h)<<", w: "<< std::to_string(src_w)<<std::endl;
-            std::cout << "new h: " << std::to_string(new_h)<<", w: "<< std::to_string(new_w)<<std::endl;
-            std::cout << "resize_ratio: " << std::to_string(resize_ratio)<<std::endl;
             
             // final_img = cv::Mat::zeros(target_h, target_w, tempimg.type());
             final_img = cv::Mat(target_h, target_w, tempimg.type(), cv::Scalar::all(255));
