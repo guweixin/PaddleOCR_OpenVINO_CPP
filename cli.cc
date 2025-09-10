@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
   }
   auto end_infer_time = std::chrono::high_resolution_clock::now();
   double inference_time = std::chrono::duration<double, std::milli>(end_infer_time - start_infer_time).count();
-  std::cout << "models init time: " << (inference_time/ total_items) << " ms" << std::endl;
+  std::cout << "models average inference time: " << (inference_time/ total_items) << " ms" << std::endl;
 
   
   return 0;
