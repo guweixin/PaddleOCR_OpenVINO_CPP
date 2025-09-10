@@ -116,21 +116,12 @@ More supported adjustable parameters are explained as follows:
 
 * PaddleOCR also supports multi-language prediction. For more supported languages and models. If you want to perform multi-language prediction, just modify the `rec_char_dict_path` (dictionary file path) and `rec_model_dir` (inference model path) fields.
 
-Finally, the average image processing time and memory usage will be output on the screen as follows.
+Finally, the average image processing time will be output on the screen as follows.
 
 - ocr
 
 ```bash
-I0717 10:40:31.994189 10176 analysis_predictor.cc:2259] ======= ir optimization completed =======
-I0717 10:40:31.995692 10176 naive_executor.cc:211] ---  skip [feed], feed -> x
-I0717 10:40:31.997696 10176 naive_executor.cc:211] ---  skip [softmax_11.tmp_0], fetch -> fetch
-[==================================================] 100.0% 1000/1000
-
-======================== Processing Results ========================
-Average inference time: 118.86 ms
-Memory usage (increase only):
-  Average increase: 794.16 MB
-  Maximum increase: 805 MB
-Results saved to: D:\output\cpp_paddleocr_paddle_gpu
-=================================================================
+Models init time: 7745.79 ms
+[==================================================] 100.0% 2000/2000
+Models average inference time:: 251.7 ms
 ```

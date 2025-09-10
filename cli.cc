@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
   auto ocr_pipeline = PaddleOCR(params);
   auto end_time = std::chrono::high_resolution_clock::now();
   double init_time = std::chrono::duration<double, std::milli>(end_time - start_time).count();
-  std::cout << "models init time: " << (init_time) << " ms" << std::endl;
+  std::cout << "Models init time: " << (init_time) << " ms" << std::endl;
 
   // 检查输入是文件还是目录
   std::vector<std::string> image_paths;
@@ -232,7 +232,7 @@ int main(int argc, char *argv[]) {
   }
   auto end_infer_time = std::chrono::high_resolution_clock::now();
   double inference_time = std::chrono::duration<double, std::milli>(end_infer_time - start_infer_time).count();
-  std::cout << "models average inference time: " << (inference_time/ total_items) << " ms" << std::endl;
+  std::cout << "Models average inference time: " << (inference_time/ total_items) << " ms" << std::endl;
 
   
   return 0;

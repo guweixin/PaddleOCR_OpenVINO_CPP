@@ -115,21 +115,12 @@ ppocr.exe ocr --input=image_dir \
 
 * PaddleOCR也支持多语言的预测，更多支持的语言和模型可以参考[识别文档](../../doc/doc_ch/recognition.md)中的多语言字典与模型部分，如果希望进行多语言预测，只需将修改`rec_char_dict_path`（字典文件路径）以及`rec_model_dir`（inference模型路径）字段即可。
 
-最终屏幕上会输出图像平均处理时间和占用内存如下。
+最终屏幕上会输出图像平均处理时间如下。
 
 - ocr
 
 ```bash
-I0717 10:40:31.994189 10176 analysis_predictor.cc:2259] ======= ir optimization completed =======
-I0717 10:40:31.995692 10176 naive_executor.cc:211] ---  skip [feed], feed -> x
-I0717 10:40:31.997696 10176 naive_executor.cc:211] ---  skip [softmax_11.tmp_0], fetch -> fetch
-[==================================================] 100.0% 1000/1000
-
-======================== Processing Results ========================
-Average inference time: 118.86 ms
-Memory usage (increase only):
-  Average increase: 794.16 MB
-  Maximum increase: 805 MB
-Results saved to: D:\output\cpp_paddleocr_paddle_gpu
-=================================================================
+Models init time: 7745.79 ms
+[==================================================] 100.0% 2000/2000
+Models average inference time:: 251.7 ms
 ```
