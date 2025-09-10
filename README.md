@@ -28,7 +28,7 @@ model/
 |   |--inference.xml
 |   |--inference.bin
 |   |--inference_960.xml
-|   |--inference_960.bin
+|   |--inference_960.bin 
 |-- ch_PP-OCRv4_rec_infer
 |   |--inference.xml
 |   |--inference.bin
