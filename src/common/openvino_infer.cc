@@ -315,13 +315,27 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
         in_w = static_cast<size_t>(first_mat.cols);
       }
 
+      // choose npu rec model
       NPURecModelSize choose = NPURecModelSize::SMALL;
-      if (in_w <= 480) choose = NPURecModelSize::SMALL;
-      else if (in_w <= 800) choose = NPURecModelSize::MEDIUM;
+      int small_model_width;
+      int medium_model_width;
+      auto it_small = npu_compiled_models_.find(NPURecModelSize::SMALL);
+      if (it_small != npu_compiled_models_.end()) {
+        auto shape = it_small->second.input(0).get_shape();
+        if (shape.size() >= 4) small_model_width = static_cast<int>(shape[3]);  
+      }
+      auto it_med = npu_compiled_models_.find(NPURecModelSize::MEDIUM);
+      if (it_med != npu_compiled_models_.end()) {
+        auto shape = it_med->second.input(0).get_shape();
+        if (shape.size() >= 4) medium_model_width = static_cast<int>(shape[3]);
+      }
+      if (in_w <= small_model_width) choose = NPURecModelSize::SMALL;
+      else if (in_w <= medium_model_width) choose = NPURecModelSize::MEDIUM;
       else choose = NPURecModelSize::LARGE;
-
       auto it_model = npu_compiled_models_.find(choose);
       auto it_req = npu_infer_requests_.find(choose);
+
+      //
       if (it_model != npu_compiled_models_.end() && it_req != npu_infer_requests_.end()) {
         // Switch to the chosen compiled model and infer request
         compiled_model_ = it_model->second;
@@ -517,4 +531,26 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
   } catch (const std::exception& e) {
     return Status::InternalError("OpenVINO inference error: " + std::string(e.what()));
   }
+}
+
+std::vector<std::pair<int, int>> OpenVinoInfer::GetNPURecInputSizes() const {
+  std::vector<std::pair<int, int>> sizes;
+  
+  if (option_.DeviceType() == "npu" && is_recognizer_) {
+    // 按模型顺序获取输入尺寸
+    for (const auto& model_pair : npu_compiled_models_) {
+      try {
+        auto input_shape = model_pair.second.input(0).get_shape();
+        if (input_shape.size() >= 4) {
+          int height = static_cast<int>(input_shape[2]);
+          int width = static_cast<int>(input_shape[3]);
+          sizes.push_back({height, width});
+        }
+      } catch (const std::exception& e) {
+        std::cout << "[WARN] Failed to get NPU model input shape: " << e.what() << std::endl;
+      }
+    }
+  }
+  
+  return sizes;
 }

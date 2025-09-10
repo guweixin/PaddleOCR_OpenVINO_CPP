@@ -45,7 +45,10 @@ public:
   // Get the last NPU mapping ratios for coordinate restoration
   std::vector<std::pair<float, float>> GetLastNpuRatios() const { return last_npu_ratios_; }
 
-private:
+  // Get NPU model input sizes (height, width) for all loaded models
+  std::vector<std::pair<int, int>> GetNPURecInputSizes() const;
+
+  private:
   std::string model_dir_;
   std::string model_file_prefix_;
   std::string model_name_;

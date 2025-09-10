@@ -56,6 +56,9 @@ public:
   std::vector<std::unique_ptr<BaseCVResult>>
   Process(std::vector<cv::Mat> &batch_data) override;
 
+  // Get NPU model input sizes for pipeline configuration
+  std::vector<std::pair<int, int>> GetNPURecInputSizes() const;
+
   Status CheckRecModelParams();
 
 private:

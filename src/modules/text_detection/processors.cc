@@ -233,9 +233,10 @@ DetResizeForTest::ResizeImageType4(const cv::Mat &img, int limit_side_len,
     return Status::InvalidArgumentError("Input image is empty for ResizeImageType4");
   }
    
-  // Determine target size from limit_side_len / limit_type similar to Type0
-  int target_h = 960;
-  int target_w = 960;
+  // 获取NPU检测模型的实际输入尺寸
+  int target_h = 960;  // 默认高度
+  int target_w = 960;  // 默认宽度
+  
   int h = img.rows;
   int w = img.cols;
   float scale;
@@ -255,9 +256,8 @@ DetResizeForTest::ResizeImageType4(const cv::Mat &img, int limit_side_len,
   if (new_w <= 0) new_w = 1;  
   cv::resize(img, resized, cv::Size(new_w, new_h), 0, 0, cv::INTER_LINEAR);
 
-  cv::Mat canvas = cv::Mat::ones(target_h, target_w, img.type());
-  if (canvas.depth() == CV_8U) canvas.setTo(cv::Scalar::all(255));
-  else canvas.setTo(cv::Scalar::all(1.0));
+  // 创建白色画布
+  cv::Mat canvas = cv::Mat(target_h, target_w, img.type(), cv::Scalar::all(255));
 
   int offset_y = 0;
   int offset_x = 0;

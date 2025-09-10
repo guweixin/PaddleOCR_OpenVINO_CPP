@@ -175,3 +175,19 @@ Status TextRecPredictor::CheckRecModelParams() {
   return Status::OK();
 }
 
+std::vector<std::pair<int, int>> TextRecPredictor::GetNPURecInputSizes() const {
+  std::vector<std::pair<int, int>> sizes;
+  
+  auto* openvino_infer = dynamic_cast<OpenVinoInfer*>(infer_ptr_.get());
+  if (openvino_infer) {
+    sizes = openvino_infer->GetNPURecInputSizes();
+  }
+  
+  // 如果获取失败，返回默认尺寸
+  if (sizes.empty()) {
+    sizes = {{48, 480}, {48, 800}, {48, 1280}};
+  }
+  
+  return sizes;
+}
+

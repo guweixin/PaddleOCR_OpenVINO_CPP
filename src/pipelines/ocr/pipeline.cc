@@ -329,15 +329,31 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
             int src_h = tempimg.rows;
             int src_w = tempimg.cols;
             float aspect_ratio = static_cast<float>(src_w) / static_cast<float>(src_h);       
-            // Model specifications and thresholds
-            const int target_h = 48;  // Standard OCR recognition height
-            const int small_width = 480;   // Small model width
-            const int medium_width = 800;  // Medium model width
-            const int large_width = 1280;  // Large model width
+            
+            // 尝试从识别模块获取实际NPU模型尺寸
+            int target_h;  // 默认高度
+            int small_width;   // 默认小模型宽度
+            int medium_width;  // 默认中模型宽度
+            int large_width;  // 默认大模型宽度
+            auto* rec_ptr = static_cast<TextRecPredictor*>(text_rec_model_.get());
+            if (rec_ptr) {
+              auto npu_sizes = rec_ptr->GetNPURecInputSizes();
+              if (npu_sizes.size() >= 3) {
+                target_h = npu_sizes[0].first;
+                small_width = npu_sizes[0].second;
+                medium_width = npu_sizes[1].second;
+                large_width = npu_sizes[2].second;
+                 std::cout << "[INFO] Using NPU model sizes: " << target_h << "x" << small_width 
+                           << ", " << target_h << "x" << medium_width 
+                           << ", " << target_h << "x" << large_width << std::endl;
+                } else {
+                  std::cout << "[WARN] NPU model sizes not available, using defaults" << std::endl;
+                }
+              }
             
             // Calculate thresholds: model_width / target_h
-            float small_threshold = static_cast<float>(small_width) / static_cast<float>(target_h);    // 480/48 = 10.0
-            float medium_threshold = static_cast<float>(medium_width) / static_cast<float>(target_h);  // 800/48 = 16.67
+            float small_threshold = static_cast<float>(small_width) / static_cast<float>(target_h);  
+            float medium_threshold = static_cast<float>(medium_width) / static_cast<float>(target_h);
             
             int target_w = 0;        
             if (aspect_ratio <= small_threshold) {
