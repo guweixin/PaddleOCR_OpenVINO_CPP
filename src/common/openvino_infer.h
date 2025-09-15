@@ -26,7 +26,7 @@
 #include "src/utils/openvino_option.h"
 
 // NPU recognition model sizes (used by OpenVinoInfer)
-enum class NPURecModelSize { SMALL = 0, MEDIUM = 1, LARGE = 2 };
+enum class NPURecModelSize { TINY = 0, SMALL = 1, MEDIUM = 2, BIG = 3, LARGE = 4 };
 
 class OpenVinoInfer {
 public:

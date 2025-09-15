@@ -330,35 +330,47 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
             
             // 尝试从识别模块获取实际NPU模型尺寸
             int target_h;  // 默认高度
+            int tiny_width;   // 默认小模型宽度
             int small_width;   // 默认小模型宽度
             int medium_width;  // 默认中模型宽度
+            int big_width;   // 默认小模型宽度
             int large_width;  // 默认大模型宽度
             auto* rec_ptr = static_cast<TextRecPredictor*>(text_rec_model_.get());
             if (rec_ptr) {
               auto npu_sizes = rec_ptr->GetNPURecInputSizes();
-              if (npu_sizes.size() >= 3) {
+              if (npu_sizes.size() >= 5) {
                 target_h = npu_sizes[0].first;
-                small_width = npu_sizes[0].second;
-                medium_width = npu_sizes[1].second;
-                large_width = npu_sizes[2].second;
+                tiny_width = npu_sizes[0].second;
+                small_width = npu_sizes[1].second;
+                medium_width = npu_sizes[2].second;
+                big_width = npu_sizes[3].second;
+                large_width = npu_sizes[4].second;
                 } else {
                   std::cout << "[WARN] NPU model sizes not available, using defaults" << std::endl;
                 }
               }
             
             // Calculate thresholds: model_width / target_h
+            float tiny_threshold = static_cast<float>(tiny_width) / static_cast<float>(target_h);  
             float small_threshold = static_cast<float>(small_width) / static_cast<float>(target_h);  
             float medium_threshold = static_cast<float>(medium_width) / static_cast<float>(target_h);
+            float big_threshold = static_cast<float>(big_width) / static_cast<float>(target_h);  
             
             int target_w = 0;        
-            if (aspect_ratio <= small_threshold) {
-              // selected_model_type = NPURecModelSize::SMALL;  // model_type = 0
+            if (aspect_ratio <= tiny_threshold) {
+              // selected_model_type = NPURecModelSize::TINY;  // model_type = 0
+              target_w = tiny_width;
+            } else if (aspect_ratio <= small_threshold) {
+              // selected_model_type = NPURecModelSize::SMALL;  // model_type = 1
               target_w = small_width;
             } else if (aspect_ratio <= medium_threshold) {
-              // selected_model_type = NPURecModelSize::MEDIUM; // model_type = 1
+              // selected_model_type = NPURecModelSize::MEDIUM; // model_type = 2
               target_w = medium_width;
+            } else if (aspect_ratio <= big_threshold) {
+              // selected_model_type = NPURecModelSize::BIG; // model_type = 2
+              target_w = big_width;
             } else {
-              // selected_model_type = NPURecModelSize::LARGE;  // model_type = 2
+              // selected_model_type = NPURecModelSize::LARGE;  // model_type = 4
               target_w = large_width;
             }
 

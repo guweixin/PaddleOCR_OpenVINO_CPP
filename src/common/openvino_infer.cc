@@ -63,8 +63,10 @@ Status OpenVinoInfer::Create() {
       weights_path = model_dir_ + "/inference_960.bin";
     }else if(device == "NPU" && is_recognizer_){
         struct RecSpec { NPURecModelSize size; const char* file; } specs[] = {
+          {NPURecModelSize::TINY, "inference_320"},
           {NPURecModelSize::SMALL, "inference_480"},
-          {NPURecModelSize::MEDIUM, "inference_800"},
+          {NPURecModelSize::MEDIUM, "inference_640"},
+          {NPURecModelSize::BIG, "inference_800"},
           {NPURecModelSize::LARGE, "inference_1280"}
         };
 
@@ -302,9 +304,17 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
       }
 
       // choose npu rec model
-      NPURecModelSize choose = NPURecModelSize::SMALL;
+      NPURecModelSize choose = NPURecModelSize::TINY;
+      int tiny_model_width;
       int small_model_width;
       int medium_model_width;
+      int big_model_width;
+
+      auto it_tiny = npu_compiled_models_.find(NPURecModelSize::TINY);
+      if (it_tiny != npu_compiled_models_.end()) {
+        auto shape = it_tiny->second.input(0).get_shape();
+        if (shape.size() >= 4) tiny_model_width = static_cast<int>(shape[3]);  
+      }
       auto it_small = npu_compiled_models_.find(NPURecModelSize::SMALL);
       if (it_small != npu_compiled_models_.end()) {
         auto shape = it_small->second.input(0).get_shape();
@@ -315,8 +325,15 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
         auto shape = it_med->second.input(0).get_shape();
         if (shape.size() >= 4) medium_model_width = static_cast<int>(shape[3]);
       }
-      if (in_w <= small_model_width) choose = NPURecModelSize::SMALL;
+      auto it_big = npu_compiled_models_.find(NPURecModelSize::BIG);
+      if (it_big != npu_compiled_models_.end()) {
+        auto shape = it_big->second.input(0).get_shape();
+        if (shape.size() >= 4) big_model_width = static_cast<int>(shape[3]);  
+      }
+      if (in_w <= tiny_model_width) choose = NPURecModelSize::TINY;
+      else if (in_w <= small_model_width) choose = NPURecModelSize::SMALL;
       else if (in_w <= medium_model_width) choose = NPURecModelSize::MEDIUM;
+      else if (in_w <= big_model_width) choose = NPURecModelSize::BIG;
       else choose = NPURecModelSize::LARGE;
       auto it_model = npu_compiled_models_.find(choose);
       auto it_req = npu_infer_requests_.find(choose);

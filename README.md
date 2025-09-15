@@ -32,8 +32,12 @@ model/
 |-- ch_PP-OCRv4_rec_infer
 |   |--inference.xml
 |   |--inference.bin
+|   |--inference_320.xml
+|   |--inference_320.bin 
 |   |--inference_480.xml
 |   |--inference_480.bin 
+|   |--inference_640.xml
+|   |--inference_640.bin 
 |   |--inference_800.xml
 |   |--inference_800.bin 
 |   |--inference_1280.xml
@@ -109,7 +113,7 @@ ppocr.exe ocr --input=image_dir \
 | rec_char_dict_path | string | ../../ppocr/utils/ppocr_keys_v1.txt | 否 | 识别模型使用的字符字典路径，决定输出字符集 |
 | text_recognition_batch_size / rec_batch_num | int | 6 | 否 | 识别模型的 batch size（并行识别文本数量，影响吞吐与显存/内存） |
 | rec_img_h | int | 48 | 否 | 识别模型输入图像高度（取决于模型训练尺寸） |
-| rec_img_w | int | 320 | 否 | 识别模型输入图像宽度（取决于模型训练尺寸） |
+| rec_img_w | int | 240 | 否 | 识别模型输入图像宽度（取决于模型训练尺寸） |
 | text_rec_score_thresh | float | 0 | 否 | 识别结果置信度阈值（低于则可过滤） |
 | text_rec_input_shape | string | '' | 否 | 可指定识别模型的输入形状（若模型支持可变尺寸） |
 

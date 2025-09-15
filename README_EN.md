@@ -32,8 +32,12 @@ model/
 |-- ch_PP-OCRv4_rec_infer
 |   |--inference.xml
 |   |--inference.bin
+|   |--inference_320.xml
+|   |--inference_320.bin 
 |   |--inference_480.xml
 |   |--inference_480.bin 
+|   |--inference_640.xml
+|   |--inference_640.bin 
 |   |--inference_800.xml
 |   |--inference_800.bin 
 |   |--inference_1280.xml
@@ -109,7 +113,7 @@ More supported adjustable parameters are explained as follows:
 | rec_char_dict_path | string | ../../ppocr/utils/ppocr_keys_v1.txt | No | Character dictionary path for recognition model (defines output charset) |
 | text_recognition_batch_size / rec_batch_num | int | 6 | No | Recognition model batch size (affects throughput and memory) |
 | rec_img_h | int | 48 | No | Recognition model input image height |
-| rec_img_w | int | 320 | No | Recognition model input image width |
+| rec_img_w | int | 240 | No | Recognition model input image width |
 | text_rec_score_thresh | float | 0 | No | Recognition confidence threshold |
 | text_rec_input_shape | string | '' | No | Optional input shape spec for recognition model |
 
