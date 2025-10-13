@@ -185,7 +185,8 @@ std::vector<std::pair<int, int>> TextRecPredictor::GetNPURecInputSizes() const {
   
   // 如果获取失败，返回默认尺寸
   if (sizes.empty()) {
-    sizes = {{48, 320}, {48, 480},{48, 640}, {48, 800}, {48, 1280}};
+    sizes = {{48, 240}, {48, 480}, {48, 800}};
+    // sizes = {{48, 240}, {48, 320}, {48, 440}, {48, 560}, {48,680}, {48, 800}, {48,1200}};
   }
   
   return sizes;

@@ -28,7 +28,7 @@ class OCRReisizeNormImg : public BaseProcessor {
 public:
   OCRReisizeNormImg(
       std::optional<std::vector<int>> input_shape = std::nullopt,
-      std::vector<int> rec_image_shape = {3, 48, 320})
+      std::vector<int> rec_image_shape = {3, 48, 240})
       : rec_image_shape_(rec_image_shape),
         input_shape_(input_shape.value_or(std::vector<int>())){};
   StatusOr<std::vector<cv::Mat>>
