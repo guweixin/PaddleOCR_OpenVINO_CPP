@@ -70,7 +70,7 @@ Status OpenVinoInfer::Create() {
 
         for (const auto &s : specs) {
           std::string rec_path = model_dir_ + "/" + s.file + ".xml";
-          std::string rec_weights = model_dir_ + "/" + s.file + ".bin";
+          std::string rec_weights = model_dir_ + "/inference_static.bin";
           if (!Utility::FileExists(rec_path).ok() || !Utility::FileExists(rec_weights).ok()) {
             std::cout << "[WARNING] NPU recognition model files not found: " << rec_path << std::endl;
             continue;

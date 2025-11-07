@@ -32,12 +32,10 @@ model/
 |-- ch_PP-OCRv4_rec_infer
 |   |--inference.xml
 |   |--inference.bin
-|   |--inference_480.xml
-|   |--inference_480.bin 
-|   |--inference_800.xml
-|   |--inference_800.bin 
+|   |--inference_480.xml 
+|   |--inference_800.xml 
 |   |--inference_1280.xml
-|   |--inference_1280.bin 
+|   |--inference_static.bin 
 ```
 
 <a name="12"></a>
