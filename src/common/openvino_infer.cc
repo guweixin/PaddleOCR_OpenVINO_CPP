@@ -63,13 +63,13 @@ Status OpenVinoInfer::Create() {
       weights_path = model_dir_ + "/inference_960.bin";
     }else if(device == "NPU" && is_recognizer_){
         struct RecSpec { NPURecModelSize size; const char* file; } specs[] = {
-          {NPURecModelSize::TINY, "inference_240"},
+          {NPURecModelSize::TINY, "inference_320"},
           {NPURecModelSize::SMALL, "inference_480"},
-          // {NPURecModelSize::MEDIUM, "inference_440"},
-          // {NPURecModelSize::BIG, "inference_560"},
-          // {NPURecModelSize::LARGE, "inference_680"},
+          {NPURecModelSize::MEDIUM, "inference_640"},
+          {NPURecModelSize::BIG, "inference_800"},
+          {NPURecModelSize::LARGE, "inference_1280"},
           // {NPURecModelSize::HUGE, "inference_800"},
-          {NPURecModelSize::UNKNOWN, "inference_800"} 
+          // {NPURecModelSize::UNKNOWN, "inference_800"} 
         };
 
         for (const auto &s : specs) {

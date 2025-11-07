@@ -33,15 +33,11 @@ model/
 |   |--inference.xml
 |   |--inference.bin
 |   |--inference_320.xml
-|   |--inference_320.bin 
 |   |--inference_480.xml
-|   |--inference_480.bin 
 |   |--inference_640.xml
-|   |--inference_640.bin 
 |   |--inference_800.xml
-|   |--inference_800.bin 
 |   |--inference_1280.xml
-|   |--inference_1280.bin 
+|   |--inference_static.bin 
 ```
 
 <a name="12"></a>
