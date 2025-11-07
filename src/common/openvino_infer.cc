@@ -310,9 +310,9 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
       NPURecModelSize choose = NPURecModelSize::TINY;
       int tiny_model_width;
       int small_model_width;
-      // int medium_model_width;
-      // int big_model_width;
-      // int large_model_width;
+      int medium_model_width;
+      int big_model_width;
+      int large_model_width;
       // int huge_model_width;
 
       auto it_tiny = npu_compiled_models_.find(NPURecModelSize::TINY);
@@ -325,21 +325,21 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
         auto shape = it_small->second.input(0).get_shape();
         if (shape.size() >= 4) small_model_width = static_cast<int>(shape[3]);  
       }
-      // auto it_med = npu_compiled_models_.find(NPURecModelSize::MEDIUM);
-      // if (it_med != npu_compiled_models_.end()) {
-      //   auto shape = it_med->second.input(0).get_shape();
-      //   if (shape.size() >= 4) medium_model_width = static_cast<int>(shape[3]);
-      // }
-      // auto it_big = npu_compiled_models_.find(NPURecModelSize::BIG);
-      // if (it_big != npu_compiled_models_.end()) {
-      //   auto shape = it_big->second.input(0).get_shape();
-      //   if (shape.size() >= 4) big_model_width = static_cast<int>(shape[3]);  
-      // }
-      // auto it_large = npu_compiled_models_.find(NPURecModelSize::LARGE);
-      // if (it_large != npu_compiled_models_.end()) {
-      //   auto shape = it_large->second.input(0).get_shape();
-      //   if (shape.size() >= 4) large_model_width = static_cast<int>(shape[3]);  
-      // }
+      auto it_med = npu_compiled_models_.find(NPURecModelSize::MEDIUM);
+      if (it_med != npu_compiled_models_.end()) {
+        auto shape = it_med->second.input(0).get_shape();
+        if (shape.size() >= 4) medium_model_width = static_cast<int>(shape[3]);
+      }
+      auto it_big = npu_compiled_models_.find(NPURecModelSize::BIG);
+      if (it_big != npu_compiled_models_.end()) {
+        auto shape = it_big->second.input(0).get_shape();
+        if (shape.size() >= 4) big_model_width = static_cast<int>(shape[3]);  
+      }
+      auto it_large = npu_compiled_models_.find(NPURecModelSize::LARGE);
+      if (it_large != npu_compiled_models_.end()) {
+        auto shape = it_large->second.input(0).get_shape();
+        if (shape.size() >= 4) large_model_width = static_cast<int>(shape[3]);  
+      }
       // auto it_huge = npu_compiled_models_.find(NPURecModelSize::HUGE);
       // if (it_huge != npu_compiled_models_.end()) {
       //   auto shape = it_huge->second.input(0).get_shape();
@@ -348,11 +348,11 @@ OpenVinoInfer::Apply(const std::vector<cv::Mat> &input_mats) {
 
       if (in_w <= tiny_model_width) choose = NPURecModelSize::TINY;
       else if (in_w <= small_model_width) choose = NPURecModelSize::SMALL;
-      // else if (in_w <= medium_model_width) choose = NPURecModelSize::MEDIUM;
-      // else if (in_w <= big_model_width) choose = NPURecModelSize::BIG;
-      // else if (in_w <= large_model_width) choose = NPURecModelSize::LARGE;
+      else if (in_w <= medium_model_width) choose = NPURecModelSize::MEDIUM;
+      else if (in_w <= big_model_width) choose = NPURecModelSize::BIG;
+      else if (in_w <= large_model_width) choose = NPURecModelSize::LARGE;
       // else if (in_w <= huge_model_width) choose = NPURecModelSize::HUGE;
-      else  choose = NPURecModelSize::UNKNOWN;
+      // else  choose = NPURecModelSize::UNKNOWN;
       auto it_model = npu_compiled_models_.find(choose);
       auto it_req = npu_infer_requests_.find(choose);
 
