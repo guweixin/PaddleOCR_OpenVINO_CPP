@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "text_detection.h"
+#include <stdexcept>
 
 #include "src/utils/args.h"
 #include "src/utils/simple_config.h"
@@ -24,7 +25,7 @@ TextDetection::TextDetection(const TextDetectionParams &params)
   auto status = CheckParams();
   if (!status.ok()) {
     INFOE("Init TextDetection fail : %s", status.ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(status.ToString());
   }
   CreateModel();
 };

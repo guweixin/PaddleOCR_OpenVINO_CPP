@@ -18,6 +18,7 @@
 #include <tuple>
 
 #include "result.h"
+#include <stdexcept>
 #include "src/common/image_batch_sampler.h"
 #include "src/utils/utility.h"
 
@@ -30,7 +31,7 @@ TextRecPredictor::TextRecPredictor(const TextRecPredictorParams &params)
   auto status_build = Build();
   if (!status_build.ok()) {
     INFOE("Build fail: %s", status_build.ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(status_build.ToString());
   }
 };
 
@@ -76,34 +77,34 @@ TextRecPredictor::Process(std::vector<cv::Mat> &batch_data) {
   auto batch_read = pre_op_.at("Read")->Apply(batch_data);
   if (!batch_read.ok()) {
     INFOE(batch_read.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batch_read.status().ToString());
   }
 
   auto batch_resize_norm = pre_op_.at("ReisizeNorm")->Apply(batch_read.value());
   if (!batch_resize_norm.ok()) {
     INFOE(batch_resize_norm.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batch_resize_norm.status().ToString());
   }
 
   // Standard preprocessing pipeline for all devices (CPU, GPU, NPU)
   auto batch_tobatch = pre_op_.at("ToBatch")->Apply(batch_resize_norm.value());
   if (!batch_tobatch.ok()) {
     INFOE(batch_tobatch.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batch_tobatch.status().ToString());
   }
 
   // Standard inference for all devices
   auto batch_infer = infer_ptr_->Apply(batch_tobatch.value());
   if (!batch_infer.ok()) {
     INFOE(batch_infer.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batch_infer.status().ToString());
   }
 
   // Standard post-processing for all devices
   auto ctc_result = post_op_.at("CTCLabelDecode")->Apply(batch_infer.value()[0]);
   if (!ctc_result.ok()) {
     INFOE(ctc_result.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(ctc_result.status().ToString());
   }
   
   std::vector<std::pair<std::string, float>> all_ctc_results = ctc_result.value();

@@ -42,7 +42,7 @@ void OCRResult::SaveToImg(const std::string &save_path) {
 
   if (image.empty()) {
     INFOE("Input image is empty.");
-    exit(-1);
+    return;
   }
 
   int h = image.rows;
@@ -109,7 +109,7 @@ void OCRResult::SaveToImg(const std::string &save_path) {
       save_path, pipeline_result_.input_path, "_ocr_res_img");
   if (!ocr_path.ok()) {
     INFOE(ocr_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   cv::imwrite(ocr_path.value(), ocr_res_image);
   // Removed doc_preprocessor functionality
@@ -358,7 +358,7 @@ void OCRResult::SaveToJson(const std::string &save_path) const {
   }
   if (!full_path.ok()) {
     INFOE(full_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   std::ofstream file(full_path.value());
   if (file.is_open()) {
@@ -366,7 +366,7 @@ void OCRResult::SaveToJson(const std::string &save_path) const {
     file.close();
   } else {
     INFOE("Could not open file for writing: %s", save_path.c_str());
-    exit(-1);
+    return;
   }
 }
 
@@ -381,7 +381,7 @@ void OCRResult::SaveToTxt(const std::string &save_path) const {
   }
   if (!full_path.ok()) {
     INFOE(full_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   
   std::ofstream file(full_path.value());
@@ -396,7 +396,7 @@ void OCRResult::SaveToTxt(const std::string &save_path) const {
     file.close();
   } else {
     INFOE("Could not open file for writing: %s", full_path.value().c_str());
-    exit(-1);
+    return;
   }
 }
 

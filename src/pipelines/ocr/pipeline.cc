@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "pipeline.h"
+#include <stdexcept>
 
 #include "result.h"
 #include "src/utils/args.h"
@@ -31,7 +32,7 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
     if (!config_path.ok()) {
       INFOE("Could not find OCR pipeline config file: %s",
             config_path.status().ToString().c_str());
-      exit(-1);
+      throw std::runtime_error(config_path.status().ToString());
     }
     config_ = SimpleConfig(config_path.value());
   }
@@ -41,7 +42,7 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
   auto text_type = config_.GetString("text_type");
   if (!text_type.ok()) {
     INFOE("Get text type fail : %s", text_type.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(text_type.status().ToString());
   }
   text_type_ = text_type.value();
   TextDetPredictorParams params_det;
@@ -50,14 +51,14 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
   if (!result_text_det_model_name.ok()) {
     INFOE("Could not find TextDetection model name : %s",
           result_text_det_model_name.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(result_text_det_model_name.status().ToString());
   }
   params_det.model_name = result_text_det_model_name.value();
   auto result_text_det_model_dir = config_.GetString("TextDetection.model_dir");
   if (!result_text_det_model_dir.ok()) {
     INFOE("Could not find TextDetection model dir : %s",
           result_text_det_model_dir.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(result_text_det_model_dir.status().ToString());
   }
   params_det.model_dir = result_text_det_model_dir.value();
   auto result_det_input_shape = config_.GetString("TextDetection.input_shape", "");
@@ -99,7 +100,7 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
     crop_by_polys_ = std::unique_ptr<CropByPolys>(new CropByPolys("poly"));
   } else {
     INFOE("Unsupported text type We %s", text_type.value().c_str());
-    exit(-1);
+    throw std::runtime_error("Unsupported text type");
   }
   
   text_det_model_ = CreateModule<TextDetPredictor>(params_det);
@@ -118,7 +119,7 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
   if (!result_text_rec_model_name.ok()) {
     INFOE("Could not find TextRecognition model name : %s",
           result_text_rec_model_name.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(result_text_rec_model_name.status().ToString());
   }
   params_rec.model_name = result_text_rec_model_name.value();
   auto result_text_rec_model_dir =
@@ -126,7 +127,7 @@ _OCRPipeline::_OCRPipeline(const OCRPipelineParams &params)
   if (!result_text_rec_model_dir.ok()) {
     INFOE("Could not find TextRecognition model dir : %s",
           result_text_rec_model_dir.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(result_text_rec_model_dir.status().ToString());
   }
   auto result_rec_input_shape =
       config_.GetString("TextRecognition.input_shape", "");
@@ -196,12 +197,12 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
       batch_sampler_ptr_->SampleFromVectorToStringVector(input);
   if (!batches.ok()) {
     INFOE("pipeline get sample fail : %s", batches.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batches.status().ToString());
   }
   if (!batches_string.ok()) {
     INFOE("pipeline get sample fail : %s",
           batches_string.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batches_string.status().ToString());
   }
   auto input_path = batch_sampler_ptr_->InputPath();
   int index = 0;
@@ -277,7 +278,7 @@ _OCRPipeline::Predict(const std::vector<std::string> &input) {
         if (!result_all_subs_of_img.ok()) {
           INFOE("Split image fail : ",
                 result_all_subs_of_img.status().ToString().c_str());
-          exit(-1);
+          throw std::runtime_error(result_all_subs_of_img.status().ToString());
         }
         all_subs_of_imgs.insert(all_subs_of_imgs.end(),
                                 result_all_subs_of_img.value().begin(),

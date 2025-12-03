@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "ocr.h"
+#include <stdexcept>
 
 #include "src/utils/args.h"
 #include "src/utils/simple_config.h"
@@ -23,7 +24,7 @@ PaddleOCR::PaddleOCR(const PaddleOCRParams &params) : params_(params) {
   auto status = CheckParams();
   if (!status.ok()) {
     INFOE("Init paddleOCR fail : %s", status.ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(status.ToString());
   }
   CreatePipeline();
 };

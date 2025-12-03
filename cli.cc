@@ -147,20 +147,20 @@ int main(int argc, char *argv[]) {
   if (input.empty()) {
     INFOE("Require input, such as ./build/ppocr ocr --input "
           "your_image_path [--param1] [--param2] [...]");
-    exit(-1);
+    return -1;
   }
   std::string main_mode = "";
   if (argc > 1) {
     main_mode = argv[1];
     if (SUPPORT_MODE_PIPELINE.count(main_mode) == 0) {
       PrintErrorInfo("ERROR: Unsupported pipeline", main_mode);
-      exit(-1);
+      return -1;
     }
   } else {
     PrintErrorInfo(
         "Must provide pipeline name, such as ./build/ppocr "
         "ocr [--param1] [--param2] [...]");
-    exit(-1);
+    return -1;
   }
   
   auto params = GetPipelineParams();
@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
     }
   } else {
     INFOE("Input path does not exist: %s", input.c_str());
-    exit(-1);
+    return -1;
   }
   
   // 逐个处理每张图片并立即输出结果
@@ -222,13 +222,13 @@ int main(int argc, char *argv[]) {
     auto outputs = ocr_pipeline.Predict(image_path);
     
     // show & save results
-    // for (auto &output : outputs) {
-    //   output->Print();
-    //   output->SaveToImg(save_path);
-    //   output->SaveToJson(save_path);
-    //   static_cast<OCRResult*>(output.get())->SaveToTxt(save_path);
-    // }
-    // INFO("Completed processing: %s", image_path.c_str());
+    for (auto &output : outputs) {
+      output->Print();
+      output->SaveToImg(save_path);
+      output->SaveToJson(save_path);
+      static_cast<OCRResult*>(output.get())->SaveToTxt(save_path);
+    }
+    INFO("Completed processing: %s", image_path.c_str());
   }
   auto end_infer_time = std::chrono::high_resolution_clock::now();
   double inference_time = std::chrono::duration<double, std::milli>(end_infer_time - start_infer_time).count();

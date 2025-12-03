@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "processors.h"
+#include <stdexcept>
 
 #include <algorithm>
 #include <cmath>
@@ -73,7 +74,7 @@ Resize::Resize(const std::vector<int> &target_size, bool keep_ratio,
   Status status = CheckImageSize();
   if (!status.ok()) {
     INFOE("image check fail : %s", status.ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(status.ToString());
   }
   std::string interp_upper = interp;
   std::transform(interp_upper.begin(), interp_upper.end(), interp_upper.begin(),
@@ -82,7 +83,7 @@ Resize::Resize(const std::vector<int> &target_size, bool keep_ratio,
   auto interp_value = GetInterp(interp_upper);
   if (!interp_value.ok()) {
     INFOE("Unknow type: %s", interp_value.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(interp_value.status().ToString());
   }
   interp_ = interp_value.value();
 }
@@ -137,7 +138,7 @@ ResizeByShort::ResizeByShort(int target_short_edge, int size_divisor,
   auto interp_value = Resize::GetInterp(interp_upper);
   if (!interp_value.ok()) {
     INFOE("Unknow type: %s", interp_value.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(interp_value.status().ToString());
   }
   interp_ = interp_value.value();
 }
@@ -180,7 +181,7 @@ ReadImage::ReadImage(const std::string &format) {
   auto fmt = StringToFormat(format);
   if (!fmt.ok()) {
     INFOE(fmt.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(fmt.status().ToString());
   }
   format_ = *fmt;
 }

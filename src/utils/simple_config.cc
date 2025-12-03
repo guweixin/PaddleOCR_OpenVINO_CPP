@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "simple_config.h"
+#include <stdexcept>
 #include "utility.h"
 #include "ilogger.h"
 #include <fstream>
@@ -59,7 +60,7 @@ SimpleConfig::SimpleConfig(const std::string &model_dir) {
   auto status = LoadFromFile(config_path);
   if (!status.ok()) {
     INFOE("Failed to load config: %s", status.ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(status.ToString());
   }
   Init();
 }

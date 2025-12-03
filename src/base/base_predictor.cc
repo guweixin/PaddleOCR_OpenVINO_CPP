@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "base_predictor.h"
+#include <stdexcept>
 
 #include <iostream>
 
@@ -37,14 +38,14 @@ BasePredictor::BasePredictor(const std::optional<std::string> &model_dir,
   auto status_build = BuildBatchSampler();
   if (!status_build.ok()) {
     // INFOE("Build sampler fail: %s", status_build.ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(status_build.ToString());
   }
   
   // 直接使用传入的模型名称，不从配置文件读取
   if (model_name.has_value()) {
     model_name_ = model_name.value();
   } else {
-    exit(-1);
+    throw std::runtime_error("Model name is required");
   }
   pp_option_ptr_.reset(new PaddlePredictorOption());
   auto device_result = device.value_or(std::string("cpu"));
@@ -62,25 +63,25 @@ BasePredictor::BasePredictor(const std::optional<std::string> &model_dir,
   auto status_device_type = pp_option_ptr_->SetDeviceType(device_type);
   if (!status_device_type.ok()) {
     // INFOE("Failed to set device");
-    exit(-1);
+    throw std::runtime_error("Failed to set device");
   }
   auto status_device_id = pp_option_ptr_->SetDeviceId(device_id);
   if (!status_device_id.ok()) {
     // INFOE("Failed to set device id");
-    exit(-1);
+    throw std::runtime_error("Failed to set device id");
   }
 
   // Simplified - just use paddle mode
   auto status_paddle = pp_option_ptr_->SetRunMode("paddle");
   if (!status_paddle.ok()) {
     // INFOE("Failed to set run mode");
-    exit(-1);
+    throw std::runtime_error("Failed to set run mode");
   }
   
   auto status_cpu_threads = pp_option_ptr_->SetCpuThreads(cpu_threads);
   if (!status_cpu_threads.ok()) {
     // INFOE("Set cpu threads fail");
-    exit(-1);
+    throw std::runtime_error("Set cpu threads fail");
   }
   // INFO("Create model: %s.", model_name_.c_str());
 }

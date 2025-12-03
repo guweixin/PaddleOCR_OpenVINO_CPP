@@ -55,12 +55,12 @@ void TextDetResult::SaveToImg(const std::string &save_path) {
   }
   if (!full_path.ok()) {
     INFOE(full_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   bool success = cv::imwrite(full_path.value(), img);
   if (!success) {
     INFOE("Failed to write the image : %s", full_path.value().c_str());
-    exit(-1);
+    return;
   }
 }
 
@@ -122,7 +122,7 @@ void TextDetResult::SaveToJson(const std::string &save_path) const {
       save_path, predictor_result_.input_path);
   if (!full_path.ok()) {
     INFOE(full_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   std::ofstream file(full_path.value());
   if (file.is_open()) {
@@ -130,7 +130,7 @@ void TextDetResult::SaveToJson(const std::string &save_path) const {
     file.close();
   } else {
     INFOE("Could not open file for writing: %s", save_path.c_str());
-    exit(-1);
+    return;
   }
 }
 

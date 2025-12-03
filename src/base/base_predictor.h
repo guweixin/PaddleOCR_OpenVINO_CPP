@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <stdexcept>
 
 #include <memory>
 #include <optional>
@@ -92,7 +93,7 @@ BasePredictor::Predict(const T &input) {
   auto batches = batch_sampler_ptr_->Apply(input);
   if (!batches.ok()) {
     INFOE("Get sample fail : %s", batches.status().ToString().c_str());
-    exit(-1);
+    throw std::runtime_error(batches.status().ToString());
   }
   input_path_ = batch_sampler_ptr_->InputPath();
   for (auto &batch_data : batches.value()) {

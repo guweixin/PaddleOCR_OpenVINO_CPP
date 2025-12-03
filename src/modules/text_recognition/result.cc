@@ -66,12 +66,12 @@ void TextRecResult::SaveToImg(const std::string &save_path) {
   }
   if (!full_path.ok()) {
     INFOE(full_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   bool success = cv::imwrite(full_path.value(), new_image);
   if (!success) {
     INFOE("Error: Failed to write the image :%s ", full_path.value().c_str());
-    exit(-1);
+    return;
   }
 }
 int TextRecResult::AdjustFontSize(int image_width,
@@ -125,7 +125,7 @@ void TextRecResult::SaveToJson(const std::string &save_path) const {
       save_path, predictor_result_.input_path);
   if (!full_path.ok()) {
     INFOE(full_path.status().ToString().c_str());
-    exit(-1);
+    return;
   }
   std::ofstream file(full_path.value());
   if (file.is_open()) {
@@ -133,7 +133,7 @@ void TextRecResult::SaveToJson(const std::string &save_path) const {
     file.close();
   } else {
     INFOE("Could not open file for writing: %s", save_path.c_str());
-    exit(-1);
+    return;
   }
 }
 
