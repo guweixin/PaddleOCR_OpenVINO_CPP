@@ -21,10 +21,10 @@
 std::string input = "";
 std::string save_path = "./output/";
 std::string text_detection_model_name = "PP-OCRv4_mobile_det";
-std::string text_detection_model_dir = "";
+std::string text_detection_model_dir = "ch_PP-OCRv4_det_infer";
 std::string text_recognition_model_name = "PP-OCRv4_mobile_rec";
-std::string text_recognition_model_dir = "";
-std::string text_recognition_batch_size = "6";
+std::string text_recognition_model_dir = "ch_PP-OCRv4_rec_infer";
+std::string text_recognition_batch_size = "1";
 
 // detection related
 std::string text_det_limit_side_len = "64";
@@ -40,11 +40,11 @@ std::string text_rec_input_shape = "";
 
 std::string lang = "";
 std::string ocr_version = "";
-#ifdef WITH_GPU
-std::string device = "gpu:0";
-#else
-std::string device = "cpu";
-#endif
+// #ifdef WITH_GPU
+// std::string device = "gpu:0";
+// #else
+std::string device = "npu";
+// #endif
 std::string vis_font_dir = "";
 std::string precision = "fp32";
 std::string cpu_threads = "8";
